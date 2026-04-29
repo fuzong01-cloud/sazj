@@ -6,7 +6,7 @@
 
 ## 当前状态
 
-- 版本基线：`v0.5.2 legacy entry cleanup baseline`。
+- 版本基线：`v0.5.3 frontend provider management baseline`。
 - 当前后端入口：`backend/app/main.py`。
 - 当前前端入口：`frontend/src/main.js`。
 - 当前识别接口：`POST /api/predict`，通过用户配置的 Vision LLM API 完成。
@@ -18,6 +18,7 @@
 - 历史记录接口：`GET /api/history`、`GET /api/history/{id}`、`DELETE /api/history/{id}`，当前操作全局识别记录。
 - 用户基础接口：`POST /api/auth/register`、`POST /api/auth/login`、`GET /api/auth/me`。
 - 用户上下文：前端支持登录/注册和本地 token 管理；登录后识别记录会绑定当前用户，历史记录优先返回当前用户数据。
+- 前端模型配置：登录后可在页面中新增、编辑、启用/停用和删除自己的 VisionProvider / TextProvider。
 - 前端历史记录：主页面已展示最近识别记录，点击记录可查看摘要、建议、置信度和原始模型输出。
 - 旧本地模型：`final_model.h5` 仅作为 legacy 资料，不参与运行。
 - 默认部署目标：Windows Server 轻量云服务器，2 核 CPU、2GB 内存、40GB 存储。
@@ -177,6 +178,8 @@ Content-Type: application/json
 注意：Provider API Key 会加密后存入数据库。API 响应只返回 `api_key_masked`，不会返回明文。
 
 登录后调用 `/api/model-configs` 会自动绑定当前用户。不同用户不会共用同一组 provider；未登录请求仍使用 `user_id=null` 的全局演示配置。
+
+前端主页面已提供模型配置管理面板。登录后可维护当前用户自己的 VisionProvider 和 TextProvider；编辑配置时 API Key 留空会保留原密钥。
 
 ## 识别记录
 

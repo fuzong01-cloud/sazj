@@ -1,5 +1,26 @@
 # 版本历史
 
+## v0.5.3 frontend provider management baseline
+
+日期：2026-04-29
+
+该版本新增前端模型配置管理页面，让登录用户在界面中维护自己的 VisionProvider 和 TextProvider。
+
+本基线已完成：
+
+- 新增 `frontend/src/api/modelConfigs.js`，封装 `/api/model-configs` 增删改查。
+- 主页面新增“模型配置”面板。
+- 登录后可新增 VisionProvider / TextProvider。
+- 支持编辑 provider 名称、类型、Base URL、模型名和启用状态。
+- 编辑时 API Key 留空会保留原密钥。
+- 支持启用/停用和删除当前用户自己的 provider。
+- 未登录时只展示登录提示，不操作全局演示 provider。
+
+已知限制：
+
+- 当前仍是单页工作台，没有独立模型配置路由。
+- 前端未直接测试外部模型连通性，后续可增加“测试连接”按钮。
+
 ## v0.5.2 legacy entry cleanup baseline
 
 日期：2026-04-29
