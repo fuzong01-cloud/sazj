@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { fetchHealth } from './api/health'
+import { fetchHistory } from './api/history'
 import { predictImage } from './api/predict'
 
 const health = ref(null)
@@ -11,6 +12,9 @@ const previewUrl = ref('')
 const predictLoading = ref(false)
 const predictError = ref('')
 const predictResult = ref(null)
+const historyLoading = ref(false)
+const historyError = ref('')
+const historyRecords = ref([])
 
 const serviceState = computed(() => {
   if (healthLoading.value) return '检测中'
@@ -59,6 +63,7 @@ async function submitPredict() {
 
   try {
     predictResult.value = await predictImage(selectedFile.value)
+    await loadHistory()
   } catch (err) {
     predictResult.value = null
     predictError.value = err instanceof Error ? err.message : '识别失败'
@@ -67,7 +72,36 @@ async function submitPredict() {
   }
 }
 
-onMounted(checkBackend)
+async function loadHistory() {
+  historyLoading.value = true
+  historyError.value = ''
+
+  try {
+    historyRecords.value = await fetchHistory(20)
+  } catch (err) {
+    historyRecords.value = []
+    historyError.value = err instanceof Error ? err.message : '历史记录获取失败'
+  } finally {
+    historyLoading.value = false
+  }
+}
+
+function formatTime(value) {
+  if (!value) return '未知时间'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return new Intl.DateTimeFormat('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)
+}
+
+onMounted(() => {
+  checkBackend()
+  loadHistory()
+})
 </script>
 
 <template>
@@ -128,6 +162,9 @@ onMounted(checkBackend)
           <p class="provider-note">
             Provider：{{ predictResult.provider_name }} / {{ predictResult.model_name }}
           </p>
+          <p v-if="predictResult.record_id" class="provider-note">
+            记录编号：#{{ predictResult.record_id }}
+          </p>
         </template>
         <template v-else>
           <h2>等待识别</h2>
@@ -136,6 +173,41 @@ onMounted(checkBackend)
           </p>
         </template>
       </article>
+    </section>
+
+    <section class="history-panel">
+      <div class="history-head">
+        <div>
+          <p class="panel-k">识别历史</p>
+          <h2>最近识别记录</h2>
+        </div>
+        <button type="button" class="ghost-button" @click="loadHistory" :disabled="historyLoading">
+          {{ historyLoading ? '刷新中...' : '刷新' }}
+        </button>
+      </div>
+
+      <p v-if="historyError" class="error-text">{{ historyError }}</p>
+
+      <div v-else-if="historyRecords.length" class="history-table" aria-label="识别历史记录">
+        <div class="history-row history-row-head">
+          <span>时间</span>
+          <span>病害</span>
+          <span>风险</span>
+          <span>Provider</span>
+          <span>模型</span>
+        </div>
+        <div v-for="record in historyRecords" :key="record.id" class="history-row">
+          <span>{{ formatTime(record.created_at) }}</span>
+          <strong>{{ record.disease_name }}</strong>
+          <span class="risk-pill">{{ record.risk_level }}</span>
+          <span>{{ record.provider_name }}</span>
+          <span>{{ record.model_name }}</span>
+        </div>
+      </div>
+
+      <div v-else class="empty-history">
+        <p>{{ historyLoading ? '正在读取历史记录...' : '暂无识别记录' }}</p>
+      </div>
     </section>
   </main>
 </template>

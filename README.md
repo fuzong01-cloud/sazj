@@ -15,6 +15,7 @@
 - 模型配置接口：`/api/model-configs`，已切换为 SQLAlchemy 数据库仓储。
 - 识别记录：`POST /api/predict` 成功后会写入 `prediction_records` 表，并返回 `record_id`。
 - 历史记录接口：`GET /api/history` 和 `GET /api/history/{id}`，当前返回全局识别记录。
+- 前端历史记录：主页面已展示最近识别记录，字段包括时间、病害、风险等级、provider 和模型名。
 - 旧本地模型：`final_model.h5` 仅作为 legacy 资料，不参与运行。
 - 默认部署目标：Windows Server 轻量云服务器，2 核 CPU、2GB 内存、40GB 存储。
 
@@ -177,6 +178,7 @@ Content-Type: application/json
 3. 落地 Windows 部署运行参数、轻量日志和数据库连接池配置。
 4. 建立用户系统和权限控制。
 5. 将全局历史记录升级为用户隔离历史，并补充图片文件保存。
-6. 持久化区域统计和日志。
-7. 增加知识库增强、防治建议管理、风险预警和统计看板。
-8. 清理或迁移 legacy 模型、Notebook、Colab、Kaggle 残留资料。
+6. 增加历史详情页和删除能力。
+7. 持久化区域统计和日志。
+8. 增加知识库增强、防治建议管理、风险预警和统计看板。
+9. 清理或迁移 legacy 模型、Notebook、Colab、Kaggle 残留资料。

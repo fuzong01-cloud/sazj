@@ -1,5 +1,24 @@
 # 版本历史
 
+## v0.4.6 frontend history list baseline
+
+日期：2026-04-29
+
+该版本新增前端历史记录列表。
+
+本基线已完成：
+
+- 新增 `frontend/src/api/history.js`。
+- 主页面加载时调用 `GET /api/history`。
+- 识别成功后自动刷新历史记录。
+- 前端展示识别时间、病害名称、风险等级、provider 和模型名。
+
+已知限制：
+
+- 当前仍是全局历史记录。
+- 尚未提供历史详情页、删除按钮和分页控件。
+- 尚未绑定用户系统。
+
 ## v0.4.5 history query API baseline
 
 日期：2026-04-29
