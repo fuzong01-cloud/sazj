@@ -7,6 +7,7 @@ from app.db.session import engine
 from app.models import model_config  # noqa: F401
 from app.models import prediction_record  # noqa: F401
 from app.models import user  # noqa: F401
+from app.models import conversation  # noqa: F401
 
 
 def create_db_and_tables() -> None:

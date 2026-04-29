@@ -20,6 +20,7 @@ class PredictionService:
         filename: str,
         content_type: str,
         user_id: int | None = None,
+        prompt: str | None = None,
         weather: WeatherContext | None = None,
         provider_id: int | None = None,
     ) -> PredictResponse:
@@ -31,6 +32,7 @@ class PredictionService:
             image_bytes=image_bytes,
             filename=filename,
             content_type=content_type,
+            user_prompt=prompt,
             weather=weather,
         )
         record = create_prediction_record(

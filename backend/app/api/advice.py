@@ -1,17 +1,22 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
+from app.api.auth import get_current_user
 from app.providers.text_provider import (
     TextProviderError,
     TextProviderNotConfiguredError,
     get_enabled_text_provider,
 )
 from app.schemas.text_tasks import AdviceRequest, AdviceResponse
+from app.schemas.auth import UserPublic
 
 router = APIRouter(prefix="/advice", tags=["advice"])
 
 
 @router.post("/generate", response_model=AdviceResponse)
-async def generate_advice(payload: AdviceRequest) -> AdviceResponse:
+async def generate_advice(
+    payload: AdviceRequest,
+    _current_user: UserPublic = Depends(get_current_user),
+) -> AdviceResponse:
     try:
         provider = get_enabled_text_provider()
         user_prompt = (

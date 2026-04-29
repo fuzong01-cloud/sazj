@@ -3,7 +3,7 @@ import { API_BASE_URL } from './health'
 
 export async function fetchHistory(limit = 10, offset = 0) {
   const params = new URLSearchParams({ limit: String(limit), offset: String(offset) })
-  const response = await fetch(`${API_BASE_URL}/history?${params.toString()}`, {
+  const response = await fetch(`${API_BASE_URL}/conversations?${params.toString()}`, {
     headers: getAuthHeaders(),
   })
   const data = await response.json().catch(() => ({}))
@@ -17,7 +17,7 @@ export async function fetchHistory(limit = 10, offset = 0) {
 }
 
 export async function fetchHistoryRecord(id) {
-  const response = await fetch(`${API_BASE_URL}/history/${id}`, {
+  const response = await fetch(`${API_BASE_URL}/conversations/${id}`, {
     headers: getAuthHeaders(),
   })
   const data = await response.json().catch(() => ({}))
@@ -31,7 +31,7 @@ export async function fetchHistoryRecord(id) {
 }
 
 export async function deleteHistoryRecord(id) {
-  const response = await fetch(`${API_BASE_URL}/history/${id}`, {
+  const response = await fetch(`${API_BASE_URL}/conversations/${id}`, {
     method: 'DELETE',
     headers: getAuthHeaders(),
   })

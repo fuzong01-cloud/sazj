@@ -18,6 +18,7 @@ class ChatRequest(BaseModel):
     question: str = Field(min_length=1)
     context: str | None = None
     provider_id: int | None = None
+    conversation_id: int | None = None
 
 
 class ChatResponse(BaseModel):
@@ -25,3 +26,4 @@ class ChatResponse(BaseModel):
     provider_name: str
     model_name: str
     answer: str
+    conversation_id: int | None = None

@@ -77,6 +77,25 @@ export async function changePassword(payload) {
   }
 }
 
+export async function uploadAvatar(file) {
+  const body = new FormData()
+  body.append('file', file)
+
+  const response = await fetch(`${API_BASE_URL}/auth/me/avatar`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body,
+  })
+  const data = await response.json().catch(() => ({}))
+
+  if (!response.ok) {
+    const message = data?.detail?.message || data?.detail || data?.message || `头像上传失败：HTTP ${response.status}`
+    throw new Error(message)
+  }
+
+  return data
+}
+
 async function submitAuth(path, payload) {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method: 'POST',

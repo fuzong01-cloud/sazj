@@ -1,11 +1,13 @@
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.api.advice import router as advice_router
 from app.api.admin_providers import router as admin_providers_router
 from app.api.auth import router as auth_router
 from app.api.chat import router as chat_router
+from app.api.conversations import router as conversations_router
 from app.api.health import router as health_router
 from app.api.history import router as history_router
 from app.api.model import router as model_router
@@ -16,6 +18,7 @@ from app.api.weather import router as weather_router
 from app.core.config import settings
 from app.core.crypto import CryptoError
 from app.core.runtime import configure_logging
+from app.core.runtime import ensure_runtime_dirs
 from app.db.init_db import create_db_and_tables
 
 
@@ -36,6 +39,7 @@ def create_app() -> FastAPI:
 
     app.include_router(health_router, prefix=settings.api_prefix)
     app.include_router(auth_router, prefix=settings.api_prefix)
+    app.include_router(conversations_router, prefix=settings.api_prefix)
     app.include_router(model_router, prefix=settings.api_prefix)
     app.include_router(model_configs_router, prefix=settings.api_prefix)
     app.include_router(providers_router, prefix=settings.api_prefix)
@@ -45,6 +49,8 @@ def create_app() -> FastAPI:
     app.include_router(chat_router, prefix=settings.api_prefix)
     app.include_router(weather_router, prefix=settings.api_prefix)
     app.include_router(admin_providers_router)
+    ensure_runtime_dirs()
+    app.mount("/uploads", StaticFiles(directory=settings.upload_dir), name="uploads")
 
     @app.exception_handler(CryptoError)
     def crypto_error_handler(_request, exc: CryptoError) -> JSONResponse:

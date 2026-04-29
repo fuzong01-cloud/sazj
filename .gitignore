@@ -20,4 +20,5 @@ npm-debug.log*
 logs/
 uploads/
 backend/logs/
+backend/logs_test/
 backend/uploads/

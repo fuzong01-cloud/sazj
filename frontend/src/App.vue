@@ -7,10 +7,11 @@ import {
   loginUser,
   registerUser,
   setAccessToken,
+  uploadAvatar,
   updateProfile,
 } from './api/auth'
 import { askAssistant } from './api/chat'
-import { fetchHealth } from './api/health'
+import { API_BASE_URL, fetchHealth } from './api/health'
 import { deleteHistoryRecord, fetchHistory, fetchHistoryRecord } from './api/history'
 import { predictImage } from './api/predict'
 import { fetchEnabledProviders } from './api/providers'
@@ -31,6 +32,8 @@ const profileModalOpen = ref(false)
 const profileLoading = ref(false)
 const profileError = ref('')
 const profileSuccess = ref('')
+const profileAvatarInputRef = ref(null)
+const avatarUploading = ref(false)
 const profileForm = ref({
   username: '',
   email: '',
@@ -53,6 +56,7 @@ const searchOpen = ref(false)
 const searchKeyword = ref('')
 
 const messages = ref([])
+const currentConversationId = ref(null)
 const composerText = ref('')
 const chatLoading = ref(false)
 const chatError = ref('')
@@ -64,6 +68,9 @@ const attachedFiles = ref([])
 const selectedImagePreview = ref('')
 const fileInputRef = ref(null)
 const dragActive = ref(false)
+const pageDragActive = ref(false)
+const attachmentError = ref('')
+let dragDepth = 0
 
 const locationLoading = ref(false)
 const locationError = ref('')
@@ -83,6 +90,8 @@ const canNextHistory = computed(() => historyOffset.value + historyLimit.value <
 const isBusy = computed(() => chatLoading.value || predictLoading.value)
 const authTitle = computed(() => (authMode.value === 'login' ? '登录' : '注册'))
 const environmentReady = computed(() => Boolean(weatherContext.value))
+const appLocked = computed(() => !currentUser.value)
+const backendOrigin = computed(() => API_BASE_URL.replace(/\/api\/?$/, ''))
 
 const modelProviders = computed(() => providers.value)
 const activeProvider = computed(() =>
@@ -93,7 +102,7 @@ const filteredHistoryRecords = computed(() => {
   const keyword = searchKeyword.value.trim().toLowerCase()
   if (!keyword) return historyRecords.value
   return historyRecords.value.filter((record) => {
-    return [record.disease_name, record.risk_level, record.provider_name, record.model_name]
+    return [record.title]
       .filter(Boolean)
       .some((value) => String(value).toLowerCase().includes(keyword))
   })
@@ -107,9 +116,16 @@ const serviceState = computed(() => {
 })
 
 const composerPlaceholder = computed(() => {
+  if (appLocked.value) return '请先登录后使用'
   if (attachedFiles.value.length) return '输入问题，或直接发送图片进行识别'
   return '给马铃薯病害助手发送消息'
 })
+
+function resolveAssetUrl(value) {
+  if (!value) return ''
+  if (/^https?:\/\//i.test(value)) return value
+  return `${backendOrigin.value}${value}`
+}
 
 async function checkBackend() {
   healthLoading.value = true
@@ -128,8 +144,12 @@ async function loadProviders() {
   providerError.value = ''
   try {
     providers.value = await fetchEnabledProviders()
-    if (!selectedProviderId.value && modelProviders.value[0]) {
-      selectedProviderId.value = String(modelProviders.value[0].id)
+    if (!selectedProviderId.value && modelProviders.value.length) {
+      const preferred =
+        modelProviders.value.find((provider) => provider.model_name === 'kimi-k2.6') ||
+        modelProviders.value.find((provider) => !String(provider.model_name).includes('kimi-k2.5')) ||
+        modelProviders.value[0]
+      selectedProviderId.value = String(preferred.id)
     }
   } catch (err) {
     providerError.value = err instanceof Error ? err.message : '模型列表获取失败'
@@ -198,6 +218,8 @@ async function submitAuth() {
     authModalOpen.value = false
     syncProfileForm()
     historyOffset.value = 0
+    currentConversationId.value = null
+    messages.value = []
     selectedHistory.value = null
     await loadHistory()
   } catch (err) {
@@ -210,10 +232,18 @@ async function submitAuth() {
 async function logout() {
   setAccessToken('')
   currentUser.value = null
+  currentConversationId.value = null
+  messages.value = []
   selectedHistory.value = null
   profileModalOpen.value = false
   historyOffset.value = 0
   await loadHistory()
+}
+
+function requireLogin() {
+  if (currentUser.value) return true
+  openAuthModal('login')
+  return false
 }
 
 async function submitProfile() {
@@ -251,20 +281,49 @@ async function submitProfile() {
   }
 }
 
+async function onProfileAvatarChange(event) {
+  const [file] = event.target.files || []
+  event.target.value = ''
+  if (!file || avatarUploading.value) return
+
+  avatarUploading.value = true
+  profileError.value = ''
+  profileSuccess.value = ''
+
+  try {
+    currentUser.value = await uploadAvatar(file)
+    syncProfileForm()
+    profileSuccess.value = '头像已上传'
+  } catch (err) {
+    profileError.value = err instanceof Error ? err.message : '头像上传失败'
+  } finally {
+    avatarUploading.value = false
+  }
+}
+
 function switchAuthMode(mode) {
   authMode.value = mode
   authError.value = ''
 }
 
 function newChat() {
+  if (!requireLogin()) return
   messages.value = []
+  currentConversationId.value = null
   selectedHistory.value = null
   chatError.value = ''
   predictError.value = ''
+  attachmentError.value = ''
   composerText.value = ''
 }
 
 async function loadHistory() {
+  if (!currentUser.value) {
+    historyRecords.value = []
+    historyTotal.value = 0
+    return
+  }
+
   historyLoading.value = true
   historyError.value = ''
 
@@ -293,6 +352,26 @@ async function selectHistory(record) {
 
   try {
     selectedHistory.value = await fetchHistoryRecord(record.id)
+    currentConversationId.value = selectedHistory.value.id
+    messages.value = (selectedHistory.value.messages || []).map((item) => {
+      const payload = item.payload || {}
+      if (item.message_type === 'prediction' && payload.provider_name) {
+        return {
+          role: item.role,
+          type: 'prediction',
+          result: payload,
+          provider: `${payload.provider_name} / ${payload.model_name}`,
+        }
+      }
+      return {
+        role: item.role,
+        text: item.content,
+        provider:
+          item.provider_name && item.model_name
+            ? `${item.provider_name} / ${item.model_name}`
+            : '',
+      }
+    })
   } catch (err) {
     historyDetailError.value = err instanceof Error ? err.message : '历史详情获取失败'
   } finally {
@@ -308,6 +387,10 @@ async function removeSelectedHistory() {
 
   try {
     await deleteHistoryRecord(selectedHistory.value.id)
+    if (currentConversationId.value === selectedHistory.value.id) {
+      currentConversationId.value = null
+      messages.value = []
+    }
     selectedHistory.value = null
     if (historyRecords.value.length === 1 && historyOffset.value > 0) {
       historyOffset.value = Math.max(0, historyOffset.value - historyLimit.value)
@@ -328,17 +411,24 @@ function triggerFileUpload() {
   fileInputRef.value?.click()
 }
 
-function appendFiles(files) {
+function appendFiles(files, options = {}) {
+  const { imagesOnly = false } = options
   const nextFiles = Array.from(files || [])
   if (!nextFiles.length) return
 
   nextFiles.forEach((file) => {
+    const isImage = file.type?.startsWith('image/') || /\.(png|jpe?g|webp|gif)$/i.test(file.name)
+    if (imagesOnly && !isImage) {
+      attachmentError.value = '当前仅支持上传图片'
+      return
+    }
+    attachmentError.value = ''
     attachedFiles.value.push({
       file,
       name: file.name,
       size: file.size,
       type: file.type || inferFileType(file.name),
-      previewUrl: file.type.startsWith('image/') ? URL.createObjectURL(file) : '',
+      previewUrl: isImage ? URL.createObjectURL(file) : '',
     })
   })
   const firstImage = attachedFiles.value.find((item) => item.previewUrl)
@@ -346,7 +436,7 @@ function appendFiles(files) {
 }
 
 function onFileChange(event) {
-  appendFiles(event.target.files)
+  appendFiles(event.target.files, { imagesOnly: true })
   event.target.value = ''
   plusMenuOpen.value = false
 }
@@ -380,11 +470,64 @@ function onDragLeave(event) {
 function onDrop(event) {
   event.preventDefault()
   dragActive.value = false
-  appendFiles(event.dataTransfer.files)
+  pageDragActive.value = false
+  dragDepth = 0
+  appendFiles(event.dataTransfer.files, { imagesOnly: true })
+}
+
+function onPageDragEnter(event) {
+  event.preventDefault()
+  dragDepth += 1
+  pageDragActive.value = true
+}
+
+function onPageDragOver(event) {
+  event.preventDefault()
+  pageDragActive.value = true
+}
+
+function onPageDragLeave(event) {
+  event.preventDefault()
+  dragDepth = Math.max(0, dragDepth - 1)
+  if (dragDepth === 0) {
+    pageDragActive.value = false
+  }
+}
+
+function onPageDrop(event) {
+  event.preventDefault()
+  dragDepth = 0
+  pageDragActive.value = false
+  dragActive.value = false
+  appendFiles(event.dataTransfer.files, { imagesOnly: true })
+}
+
+function onPaste(event) {
+  const items = Array.from(event.clipboardData?.items || [])
+  const imageFiles = items
+    .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
+    .map((item) => item.getAsFile())
+    .filter(Boolean)
+
+  if (!imageFiles.length) return
+
+  const text = event.clipboardData?.getData('text/plain') || ''
+  const renamedFiles = imageFiles.map((file) => {
+    const extension = file.type.split('/')[1] || 'png'
+    return new File([file], `clipboard-${formatCompactTimestamp()}.${extension}`, {
+      type: file.type || 'image/png',
+    })
+  })
+  event.preventDefault()
+  if (text && event.target?.tagName === 'TEXTAREA') {
+    composerText.value = `${composerText.value}${text}`
+  }
+  appendFiles(renamedFiles, { imagesOnly: true })
 }
 
 async function loadWeatherFromBrowser() {
   plusMenuOpen.value = false
+  if (!requireLogin()) return
   if (!navigator.geolocation) {
     locationError.value = '当前浏览器不支持定位。'
     return
@@ -434,12 +577,18 @@ function buildChatContext(files = attachedFiles.value) {
 }
 
 async function submitComposer() {
+  if (!requireLogin()) return
   const text = composerText.value.trim()
   if (isBusy.value) return
   if (!text && !attachedFiles.value.length) return
+  if (!selectedProviderId.value) {
+    chatError.value = '请先在后台配置并启用一个通用模型。'
+    return
+  }
 
   chatError.value = ''
   predictError.value = ''
+  attachmentError.value = ''
   selectedHistory.value = null
 
   const imageAttachment = attachedFiles.value.find((item) => item.file?.type?.startsWith('image/'))
@@ -468,14 +617,23 @@ async function submitTextMessage(text) {
       question: text,
       context,
       provider_id: selectedProviderId.value ? Number(selectedProviderId.value) : null,
+      conversation_id: currentConversationId.value,
     })
+    currentConversationId.value = result.conversation_id || currentConversationId.value
     messages.value.push({
       role: 'assistant',
-      text: result.answer,
+      text: result.answer || '模型未返回有效内容',
       provider: `${result.provider_name} / ${result.model_name}`,
     })
+    await loadHistory()
   } catch (err) {
-    chatError.value = err instanceof Error ? err.message : 'AI 助手调用失败'
+    if (err?.conversationId) currentConversationId.value = err.conversationId
+    chatError.value = normalizeModelError(err instanceof Error ? err.message : 'AI 助手调用失败')
+    messages.value.push({
+      role: 'assistant',
+      text: chatError.value,
+    })
+    await loadHistory()
   } finally {
     chatLoading.value = false
   }
@@ -501,7 +659,10 @@ async function submitImageMessage(text, imageAttachment) {
       imageAttachment.file,
       weatherContext.value,
       selectedProviderId.value ? Number(selectedProviderId.value) : null,
+      currentConversationId.value,
+      prompt,
     )
+    currentConversationId.value = result.conversation_id || currentConversationId.value
     predictResult.value = result
     if (result.weather) weatherContext.value = result.weather
     messages.value.push({
@@ -512,16 +673,30 @@ async function submitImageMessage(text, imageAttachment) {
     })
     await loadHistory()
   } catch (err) {
-    predictError.value = err instanceof Error ? err.message : '图片识别失败'
+    if (err?.conversationId) currentConversationId.value = err.conversationId
+    predictError.value = normalizeModelError(err instanceof Error ? err.message : '图片识别失败')
+    messages.value.push({
+      role: 'assistant',
+      text: predictError.value,
+    })
+    await loadHistory()
   } finally {
     predictLoading.value = false
   }
 }
 
+function normalizeModelError(message) {
+  const value = String(message || '')
+  if (value.includes('429') || value.toLowerCase().includes('overloaded')) {
+    return '当前模型过载，请切换到 kimi-k2.6 或稍后重试。'
+  }
+  return value
+}
+
 function inferFileType(name) {
   const ext = name.split('.').pop()?.toLowerCase()
   if (!ext) return 'file'
-  if (['png', 'jpg', 'jpeg', 'webp'].includes(ext)) return `image/${ext}`
+  if (['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(ext)) return `image/${ext}`
   if (['doc', 'docx'].includes(ext)) return 'word'
   if (['txt', 'md'].includes(ext)) return 'text'
   if (['pdf'].includes(ext)) return 'pdf'
@@ -537,6 +712,22 @@ function fileIcon(file) {
   return '文'
 }
 
+function predictionTitle(result) {
+  const title = result?.disease_name || ''
+  if (!title || title === '待确认' || title === '模型回复') return '模型识别结果'
+  return title
+}
+
+function predictionStatus(result) {
+  const status = result?.risk_level || ''
+  if (!status || status === '待确认' || status === '未结构化') return '已返回'
+  return status
+}
+
+function predictionContent(result) {
+  return result?.content || result?.raw_text || result?.summary || '模型未返回有效内容'
+}
+
 function formatTime(value) {
   if (!value) return '未知时间'
   const date = new Date(value)
@@ -547,6 +738,13 @@ function formatTime(value) {
     hour: '2-digit',
     minute: '2-digit',
   }).format(date)
+}
+
+function formatCompactTimestamp(value = new Date()) {
+  const pad = (number) => String(number).padStart(2, '0')
+  return `${value.getFullYear()}${pad(value.getMonth() + 1)}${pad(value.getDate())}-${pad(value.getHours())}${pad(
+    value.getMinutes(),
+  )}`
 }
 
 function formatCoordinate(value) {
@@ -573,7 +771,15 @@ onMounted(async () => {
     class="chat-shell"
     :class="{ 'sidebar-collapsed': sidebarCollapsed }"
     @click="closeFloatingPanels"
+    @dragenter="onPageDragEnter"
+    @dragover="onPageDragOver"
+    @dragleave="onPageDragLeave"
+    @drop="onPageDrop"
+    @paste="onPaste"
   >
+    <div v-if="pageDragActive" class="drop-overlay">
+      <div>释放以上传图片</div>
+    </div>
     <aside class="sidebar" aria-label="历史对话侧边栏">
       <div class="sidebar-top">
         <button type="button" class="brand-button" title="薯安智检">
@@ -625,9 +831,9 @@ onMounted(async () => {
             :class="{ active: selectedHistory?.id === record.id }"
             @click="selectHistory(record)"
           >
-            <span>{{ formatTime(record.created_at) }}</span>
-            <strong>{{ record.disease_name }}</strong>
-            <small>{{ record.risk_level }} · {{ record.provider_name }}</small>
+            <span>{{ formatTime(record.updated_at || record.created_at) }}</span>
+            <strong>{{ record.title }}</strong>
+            <small>会话记录</small>
           </button>
           <p v-if="!filteredHistoryRecords.length && !sidebarCollapsed" class="empty-text">
             {{ historyLoading ? '正在读取历史...' : '暂无历史记录' }}
@@ -643,7 +849,7 @@ onMounted(async () => {
 
       <button type="button" class="account-entry" @click="openProfileModal">
         <span class="account-avatar">
-          <img v-if="currentUser?.avatar_url" :src="currentUser.avatar_url" alt="用户头像" />
+          <img v-if="currentUser?.avatar_url" :src="resolveAssetUrl(currentUser.avatar_url)" alt="用户头像" />
           <span v-else>{{ currentUser?.username?.slice(0, 1)?.toUpperCase() || '登' }}</span>
         </span>
         <span class="account-copy">
@@ -659,7 +865,7 @@ onMounted(async () => {
           <label>
             <span>模型</span>
             <select v-model="selectedProviderId">
-              <option value="">默认模型</option>
+              <option value="" disabled>请选择模型</option>
               <option v-for="provider in modelProviders" :key="provider.id" :value="String(provider.id)">
                 {{ provider.provider_name }} / {{ provider.model_name }}
               </option>
@@ -682,42 +888,34 @@ onMounted(async () => {
         <section v-if="selectedHistory" class="history-detail-card">
           <div class="detail-head">
             <div>
-              <span>历史记录 #{{ selectedHistory.id }}</span>
-              <h2>{{ selectedHistory.disease_name }}</h2>
+              <span>会话 #{{ selectedHistory.id }}</span>
+              <h2>{{ selectedHistory.title }}</h2>
             </div>
-            <strong>{{ selectedHistory.risk_level }}</strong>
+            <strong>{{ selectedHistory.messages?.length || 0 }} 条消息</strong>
           </div>
           <p v-if="historyDetailError" class="error-text">{{ historyDetailError }}</p>
           <p v-else-if="historyDetailLoading" class="empty-text">正在读取详情...</p>
           <template v-else>
-            <p>{{ selectedHistory.summary }}</p>
             <dl class="detail-grid">
               <div>
-                <dt>时间</dt>
+                <dt>创建时间</dt>
                 <dd>{{ formatTime(selectedHistory.created_at) }}</dd>
               </div>
               <div>
-                <dt>置信度</dt>
-                <dd>{{ selectedHistory.confidence_percent !== null ? `${selectedHistory.confidence_percent}%` : '未返回' }}</dd>
+                <dt>更新时间</dt>
+                <dd>{{ formatTime(selectedHistory.updated_at) }}</dd>
               </div>
               <div>
-                <dt>Provider</dt>
-                <dd>{{ selectedHistory.provider_name }}</dd>
+                <dt>当前会话</dt>
+                <dd>{{ currentConversationId === selectedHistory.id ? '已载入' : '未载入' }}</dd>
               </div>
               <div>
-                <dt>模型</dt>
-                <dd>{{ selectedHistory.model_name }}</dd>
+                <dt>归属</dt>
+                <dd>{{ currentUser?.username || '未知用户' }}</dd>
               </div>
             </dl>
-            <ul v-if="selectedHistory.suggestions?.length" class="suggestion-list">
-              <li v-for="item in selectedHistory.suggestions" :key="item">{{ item }}</li>
-            </ul>
-            <details class="raw-output">
-              <summary>查看原始模型输出</summary>
-              <pre>{{ selectedHistory.raw_text || '无原始输出' }}</pre>
-            </details>
             <button type="button" class="danger-button" @click="removeSelectedHistory" :disabled="historyDeleteLoading">
-              {{ historyDeleteLoading ? '删除中...' : '删除这条记录' }}
+              {{ historyDeleteLoading ? '删除中...' : '删除这个会话' }}
             </button>
           </template>
         </section>
@@ -726,7 +924,7 @@ onMounted(async () => {
           <img src="/logo.png" alt="薯安智检" />
           <h1>今天要分析什么？</h1>
           <p>
-            可以直接询问病害问题，也可以拖拽图片到输入框进行识别。
+            可以直接询问病害问题，也可以拖拽图片到聊天页面任意位置进行识别。
             天气和位置在输入框左侧的扩展菜单中获取。
           </p>
         </section>
@@ -746,11 +944,11 @@ onMounted(async () => {
                 <div class="detail-head">
                   <div>
                     <span>识别结果</span>
-                    <h2>{{ message.result.disease_name }}</h2>
+                    <h2>{{ predictionTitle(message.result) }}</h2>
                   </div>
-                  <strong>{{ message.result.risk_level }}</strong>
+                  <strong>{{ predictionStatus(message.result) }}</strong>
                 </div>
-                <p>{{ message.result.summary }}</p>
+                <p>{{ predictionContent(message.result) }}</p>
                 <ul v-if="message.result.suggestions?.length" class="suggestion-list">
                   <li v-for="item in message.result.suggestions" :key="item">{{ item }}</li>
                 </ul>
@@ -763,6 +961,7 @@ onMounted(async () => {
 
         <p v-if="chatError" class="error-text inline-error">{{ chatError }}</p>
         <p v-if="predictError" class="error-text inline-error">{{ predictError }}</p>
+        <p v-if="attachmentError" class="error-text inline-error">{{ attachmentError }}</p>
         <p v-if="locationError" class="error-text inline-error">{{ locationError }}</p>
         <p v-if="isBusy" class="empty-text inline-status">
           {{ predictLoading ? '正在调用 Vision LLM 识别图片...' : '正在调用 Text LLM 生成回答...' }}
@@ -774,9 +973,9 @@ onMounted(async () => {
           class="composer"
           :class="{ dragging: dragActive }"
           @click.stop
-          @dragover="onDragOver"
-          @dragleave="onDragLeave"
-          @drop="onDrop"
+          @dragover.stop="onDragOver"
+          @dragleave.stop="onDragLeave"
+          @drop.stop="onDrop"
         >
           <div v-if="attachedFiles.length || weatherContext" class="context-strip">
             <div v-for="(item, index) in attachedFiles" :key="`${item.name}-${index}`" class="attachment-card">
@@ -803,7 +1002,8 @@ onMounted(async () => {
                 class="plus-button"
                 title="添加文件等/"
                 aria-label="添加文件等"
-                @click.stop="plusMenuOpen = !plusMenuOpen"
+                :disabled="appLocked"
+                @click.stop="requireLogin() && (plusMenuOpen = !plusMenuOpen)"
               >
                 +
               </button>
@@ -811,11 +1011,11 @@ onMounted(async () => {
                 <button
                   type="button"
                   class="has-tip"
-                  data-tip="支持 png、jpg、txt、word 等格式"
+                  data-tip="当前支持 png、jpg、jpeg、webp 图片"
                   @click="triggerFileUpload"
                 >
                   <span>📎</span>
-                  上传图片/文件
+                  上传图片
                 </button>
                 <button type="button" @click="loadWeatherFromBrowser" :disabled="locationLoading">
                   <span>⌖</span>
@@ -828,17 +1028,17 @@ onMounted(async () => {
               class="hidden-input"
               type="file"
               multiple
-              accept=".png,.jpg,.jpeg,.webp,.txt,.md,.doc,.docx,.pdf,image/*,text/*"
+              accept="image/png,image/jpeg,image/webp,image/gif"
               @change="onFileChange"
             />
             <textarea
               v-model="composerText"
               rows="1"
               :placeholder="composerPlaceholder"
-              :disabled="isBusy"
+              :disabled="isBusy || appLocked"
               @keydown.enter.exact.prevent="submitComposer"
             ></textarea>
-            <button type="submit" class="send-button" :disabled="isBusy || (!composerText.trim() && !attachedFiles.length)">
+            <button type="submit" class="send-button" :disabled="appLocked || isBusy || (!composerText.trim() && !attachedFiles.length)">
               ↑
             </button>
           </form>
@@ -872,6 +1072,25 @@ onMounted(async () => {
         <button type="button" class="modal-close" @click="closeModals">×</button>
         <h2>个人信息</h2>
         <form class="profile-form" @submit.prevent="submitProfile">
+          <div class="avatar-upload-row">
+            <span class="profile-avatar-preview">
+              <img v-if="profileForm.avatarUrl" :src="resolveAssetUrl(profileForm.avatarUrl)" alt="头像预览" />
+              <span v-else>{{ currentUser?.username?.slice(0, 1)?.toUpperCase() || 'U' }}</span>
+            </span>
+            <div>
+              <button type="button" class="secondary-button" @click="profileAvatarInputRef?.click()" :disabled="avatarUploading">
+                {{ avatarUploading ? '上传中...' : '上传头像' }}
+              </button>
+              <small>支持 PNG、JPG、WebP，文件保存到服务器 uploads 目录。</small>
+            </div>
+            <input
+              ref="profileAvatarInputRef"
+              class="hidden-input"
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              @change="onProfileAvatarChange"
+            />
+          </div>
           <label>
             <span>用户名</span>
             <input v-model="profileForm.username" />

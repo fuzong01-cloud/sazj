@@ -44,7 +44,7 @@ def provider_admin_page(
     configs = list_configs(user_id=None)
     rows = "\n".join(_render_config_card(config, token or "") for config in configs)
     if not rows:
-        rows = '<p class="empty">暂无全局模型配置。请先新增 VisionProvider 和 TextProvider。</p>'
+        rows = '<p class="empty">暂无全局模型配置。请先新增通用模型。</p>'
     notice = _render_notice(test_status, test_message)
 
     return _page(
@@ -54,7 +54,7 @@ def provider_admin_page(
           <div>
             <p class="eyebrow">Global Provider Admin</p>
             <h1>后端模型配置</h1>
-            <p>这里配置平台统一承担的 Vision/Text LLM API。普通用户前端不会看到 API Key 或 Base URL。</p>
+            <p>这里配置平台统一承担的通用大模型 API。普通用户前端不会看到 API Key 或 Base URL。</p>
           </div>
           <a class="ghost" href="/docs">API 文档</a>
         </header>
@@ -151,8 +151,6 @@ def _render_form(token: str, config=None) -> str:
     provider_name = "" if config is None else escape(config.provider_name)
     base_url = "" if config is None else escape(config.base_url)
     model_name = "" if config is None else escape(config.model_name)
-    is_vision = config is None or config.provider_type.value == "vision"
-    is_text = config is not None and config.provider_type.value == "text"
     checked = "checked" if config is None or config.enabled else ""
     api_key_required = "required" if config is None else ""
     api_key_placeholder = "新增时必填" if config is None else "留空则保留原密钥"
@@ -161,12 +159,8 @@ def _render_form(token: str, config=None) -> str:
     <form method="post" action="/admin/providers/save" class="form">
       <input type="hidden" name="token" value="{escape(token)}">
       {config_id}
-      <label>Provider 类型
-        <select name="provider_type">
-          <option value="vision" {"selected" if is_vision else ""}>VisionProvider</option>
-          <option value="text" {"selected" if is_text else ""}>TextProvider</option>
-        </select>
-      </label>
+      <input type="hidden" name="provider_type" value="text">
+      <p class="muted">模型类型：通用模型。图片识别和文字问答会优先使用前端当前选择的同一个模型。</p>
       <label>Provider 名称
         <input name="provider_name" value="{provider_name}" required>
       </label>
@@ -193,7 +187,7 @@ def _render_config_card(config, token: str) -> str:
       <div class="card-head">
         <div>
           <strong>{escape(config.provider_name)}</strong>
-          <span>{escape(config.provider_type.value)} / {escape(config.model_name)}</span>
+          <span>通用模型 / {escape(config.model_name)}</span>
         </div>
         <em class="badge {'on' if config.enabled else ''}">{'启用' if config.enabled else '停用'}</em>
       </div>

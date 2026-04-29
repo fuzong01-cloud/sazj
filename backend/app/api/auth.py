@@ -1,5 +1,9 @@
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from pathlib import Path
+from uuid import uuid4
 
+from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile, status
+
+from app.core.config import settings
 from app.core.security import AuthError, create_access_token, decode_access_token, verify_password
 from app.repositories.user_repository import (
     create_user,
@@ -97,3 +101,48 @@ def change_password(
         raise HTTPException(status_code=400, detail="当前密码不正确")
     if not update_user_password(current_user.id, payload.new_password):
         raise HTTPException(status_code=404, detail="用户不存在")
+
+
+@router.post("/me/avatar", response_model=UserPublic)
+async def upload_avatar(
+    file: UploadFile = File(...),
+    current_user: UserPublic = Depends(get_current_user),
+) -> UserPublic:
+    content_type = file.content_type or ""
+    if content_type not in {"image/png", "image/jpeg", "image/webp"}:
+        raise HTTPException(status_code=400, detail="头像仅支持 PNG、JPG、WebP 图片")
+
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="头像文件不能为空")
+    if len(data) > min(settings.max_upload_bytes, 2 * 1024 * 1024):
+        raise HTTPException(status_code=400, detail="头像文件不能超过 2MB")
+
+    suffix = _avatar_suffix(file.filename or "", content_type)
+    try:
+        avatar_dir = settings.upload_dir / "avatars"
+        avatar_dir.mkdir(parents=True, exist_ok=True)
+        filename = f"user_{current_user.id}_{uuid4().hex}{suffix}"
+        target = avatar_dir / filename
+        target.write_bytes(data)
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"头像目录不可写：{exc}") from exc
+
+    user = update_user_profile(
+        current_user.id,
+        UserProfileUpdate(avatar_url=f"/uploads/avatars/{filename}"),
+    )
+    if user is None:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    return user
+
+
+def _avatar_suffix(filename: str, content_type: str) -> str:
+    suffix = Path(filename).suffix.lower()
+    if suffix in {".png", ".jpg", ".jpeg", ".webp"}:
+        return suffix
+    return {
+        "image/png": ".png",
+        "image/jpeg": ".jpg",
+        "image/webp": ".webp",
+    }.get(content_type, ".png")

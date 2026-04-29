@@ -14,7 +14,9 @@ export async function askAssistant(payload) {
 
   if (!response.ok) {
     const message = data?.detail?.message || data?.detail || data?.message || `AI 助手调用失败：HTTP ${response.status}`
-    throw new Error(message)
+    const error = new Error(message)
+    error.conversationId = data?.detail?.conversation_id
+    throw error
   }
 
   return data
