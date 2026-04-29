@@ -8,6 +8,8 @@ from app.api.model import router as model_router
 from app.api.model_configs import router as model_configs_router
 from app.api.predict import router as predict_router
 from app.core.config import settings
+from app.core.runtime import configure_logging
+from app.db.init_db import create_db_and_tables
 
 
 def create_app() -> FastAPI:
@@ -31,6 +33,12 @@ def create_app() -> FastAPI:
     app.include_router(predict_router, prefix=settings.api_prefix)
     app.include_router(advice_router, prefix=settings.api_prefix)
     app.include_router(chat_router, prefix=settings.api_prefix)
+
+    @app.on_event("startup")
+    def on_startup() -> None:
+        configure_logging()
+        if settings.auto_create_tables:
+            create_db_and_tables()
 
     @app.get("/")
     def root() -> dict[str, str]:

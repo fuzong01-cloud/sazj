@@ -6,29 +6,23 @@
 
 ## 当前状态
 
-- 版本基线：`v0.3.0 api-provider baseline`。
+- 版本基线：`v0.4.0 PostgreSQL model config baseline`。
 - 当前后端入口：`backend/app/main.py`。
 - 当前前端入口：`frontend/src/main.js`。
 - 当前识别接口：`POST /api/predict`，通过用户配置的 Vision LLM API 完成。
 - 当前建议接口：`POST /api/advice/generate`，通过用户配置的 Text LLM API 完成。
 - 当前问答接口：`POST /api/chat`，通过用户配置的 Text LLM API 完成。
-- 模型配置接口：`/api/model-configs`，当前为内存版结构基线，后续迁入 PostgreSQL。
+- 模型配置接口：`/api/model-configs`，已切换为 SQLAlchemy 数据库仓储。
 - 旧本地模型：`final_model.h5` 仅作为 legacy 资料，不参与运行。
+- 默认部署目标：Windows Server 轻量云服务器，2 核 CPU、2GB 内存、40GB 存储。
 
 ## 技术栈
 
-当前运行栈：
-
 - 后端：Python + FastAPI + Uvicorn
+- 数据库：PostgreSQL + SQLAlchemy
 - 外部模型调用：httpx + OpenAI-compatible chat/completions
 - 前端：Vue + Vite + JavaScript
-
-目标技术路线：
-
-- Vision LLM API：负责图像识别。
-- Text LLM API：负责文本建议、网页 AI 助手和病害问答。
-- PostgreSQL：保存模型配置、识别结果、用户历史、区域统计和日志。
-- 平台不内置 API Key、Token，也不固定绑定任何厂商。
+- 部署：Windows Server + Uvicorn + PostgreSQL for Windows + Caddy/NSSM
 
 ## 仓库结构
 
@@ -40,25 +34,64 @@
 |   |-- app/
 |   |   |-- api/
 |   |   |-- core/
+|   |   |-- db/                             # SQLAlchemy engine/session/init
+|   |   |-- models/                         # SQLAlchemy models
 |   |   |-- providers/                      # VisionProvider / TextProvider
-|   |   |-- repositories/                   # 临时内存仓储，后续替换为 PostgreSQL
+|   |   |-- repositories/                   # 数据库仓储
 |   |   |-- schemas/
 |   |   `-- services/
 |   |-- requirements.txt
 |   `-- README.md
 |-- frontend/
-|   |-- src/
-|   |   |-- api/
-|   |   |-- styles/
-|   |   `-- App.vue
-|   |-- package.json
-|   `-- README.md
+|-- deploy/                                 # Windows Server 部署文档
 |-- main/                                   # legacy Colab/Kaggle 训练残留
+|-- legacy/
 |-- docs/
-|   `-- legacy_snapshot.md
 |-- README.md
 `-- HISTORY.md
 ```
+
+## PostgreSQL 配置
+
+创建数据库后，在 `backend/.env` 中配置：
+
+```text
+DATABASE_URL=postgresql+psycopg://postgres:postgres@127.0.0.1:5432/sazj
+AUTO_CREATE_TABLES=true
+DB_POOL_SIZE=2
+DB_MAX_OVERFLOW=1
+DB_POOL_TIMEOUT=30
+DB_POOL_RECYCLE=1800
+UPLOAD_DIR=../uploads
+LOG_DIR=../logs
+```
+
+当前阶段使用 SQLAlchemy `create_all` 在开发环境自动建表。后续进入正式迁移阶段时，应改为 Alembic 管理迁移。
+
+2 核 2GB Windows Server 默认采用轻量连接池：常驻连接 2 个，临时溢出连接 1 个。后端启动时会自动创建 `UPLOAD_DIR` 和 `LOG_DIR`，并在 `LOG_DIR/backend.log` 写入滚动日志。
+
+## Windows Server 部署
+
+当前项目默认面向一台 Windows Server 轻量云服务器部署：
+
+```text
+C:\sazj\
+  backend\
+  frontend\
+  deploy\
+  logs\
+  uploads\
+  .env
+```
+
+部署文档：
+
+- [Windows Server 轻量云服务器部署指南](deploy/windows_server_deploy.md)
+- [使用 NSSM 注册 FastAPI 后端服务](deploy/windows_nssm_service.md)
+- [Windows Server .env 示例](deploy/windows_env_example.md)
+- [Windows Server 防火墙与公网访问说明](deploy/windows_firewall_notes.md)
+
+服务器只负责运行前端静态页面、FastAPI 后端、PostgreSQL、上传文件存储、日志记录和外部模型 API 转发。不要在服务器上训练 CNN、运行本地大模型或执行重型推理。
 
 ## 本地启动
 
@@ -119,13 +152,15 @@ Content-Type: application/json
 }
 ```
 
-当前模型配置暂存在内存中，服务重启后会丢失。后续阶段将迁移到 PostgreSQL，并对 API Key 加密保存。
+注意：当前 API Key 已进入数据库字段，但尚未加密。下一阶段需要实现加密存储。
 
 ## 开发计划
 
-1. 完成 VisionProvider / TextProvider 抽象层。
-2. 完成模型配置 API，并迁移到 PostgreSQL。
-3. 让识别结果、用户历史、区域统计和日志持久化。
-4. 建立用户系统和权限控制。
-5. 增加知识库增强、防治建议管理、风险预警和统计看板。
-6. 清理或迁移 legacy 模型、Notebook、Colab、Kaggle 残留资料。
+1. 完成模型配置 PostgreSQL 持久化。
+2. 建立 Windows Server 2 核 2GB 演示部署方案。
+3. 落地 Windows 部署运行参数、轻量日志和数据库连接池配置。
+4. 对 API Key / Token 做加密保存。
+5. 持久化识别结果、用户历史、区域统计和日志。
+6. 建立用户系统和权限控制。
+7. 增加知识库增强、防治建议管理、风险预警和统计看板。
+8. 清理或迁移 legacy 模型、Notebook、Colab、Kaggle 残留资料。
