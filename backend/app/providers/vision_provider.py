@@ -7,6 +7,8 @@ import httpx
 from app.repositories.model_config_repository import get_enabled_provider
 from app.schemas.model_config import ProviderType
 from app.schemas.predict import PredictResponse
+from app.schemas.weather import WeatherContext
+from app.services.weather_service import format_weather_for_prompt
 
 
 class ProviderNotConfiguredError(RuntimeError):
@@ -21,7 +23,13 @@ class VisionProvider:
     def __init__(self, config) -> None:
         self.config = config
 
-    async def predict(self, image_bytes: bytes, filename: str, content_type: str) -> PredictResponse:
+    async def predict(
+        self,
+        image_bytes: bytes,
+        filename: str,
+        content_type: str,
+        weather: WeatherContext | None = None,
+    ) -> PredictResponse:
         mime_type = content_type if content_type.startswith("image/") else "image/png"
         image_base64 = base64.b64encode(image_bytes).decode("ascii")
         image_url = f"data:{mime_type};base64,{image_base64}"
@@ -33,8 +41,9 @@ class VisionProvider:
                     "role": "system",
                     "content": (
                         "你是马铃薯病虫害识别助手。请根据图片判断可能的病害，"
-                        "仅返回 JSON，不要返回 Markdown。字段包括 disease_name、"
-                        "confidence、risk_level、summary、suggestions。confidence 为 0 到 1。"
+                        "并结合定位、天气、气候带给出专业防治建议。仅返回 JSON，"
+                        "不要返回 Markdown。字段包括 disease_name、confidence、"
+                        "risk_level、summary、suggestions。confidence 为 0 到 1。"
                     ),
                 },
                 {
@@ -42,7 +51,10 @@ class VisionProvider:
                     "content": [
                         {
                             "type": "text",
-                            "text": "请识别这张马铃薯叶片图片，并给出简短防治建议。",
+                            "text": (
+                                "请识别这张马铃薯叶片图片，并结合以下环境上下文给出专业防治建议。\n"
+                                f"{format_weather_for_prompt(weather)}"
+                            ),
                         },
                         {
                             "type": "image_url",
@@ -87,6 +99,7 @@ class VisionProvider:
             summary=str(parsed.get("summary") or text or "视觉模型未返回有效摘要"),
             suggestions=[str(item) for item in suggestions if str(item).strip()],
             raw_text=text,
+            weather=weather,
         )
 
     async def _post_chat_completions(self, payload: dict[str, Any]) -> dict[str, Any]:

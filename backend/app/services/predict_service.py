@@ -6,6 +6,7 @@ from app.providers.vision_provider import (
 from app.repositories.prediction_record_repository import create_prediction_record
 from app.schemas.predict import PredictResponse
 from app.schemas.prediction_record import PredictionRecordCreate
+from app.schemas.weather import WeatherContext
 
 
 class InvalidImageError(ValueError):
@@ -19,6 +20,7 @@ class PredictionService:
         filename: str,
         content_type: str,
         user_id: int | None = None,
+        weather: WeatherContext | None = None,
     ) -> PredictResponse:
         if not image_bytes:
             raise InvalidImageError("请上传一张图片")
@@ -28,6 +30,7 @@ class PredictionService:
             image_bytes=image_bytes,
             filename=filename,
             content_type=content_type,
+            weather=weather,
         )
         record = create_prediction_record(
             PredictionRecordCreate(

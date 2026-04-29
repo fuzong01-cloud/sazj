@@ -189,6 +189,7 @@ http://服务器公网IP/admin/providers
 - 维护者可以通过 `/admin/providers` 创建 VisionProvider 和 TextProvider 配置，并使用“测试连接”验证 Base URL、API Key 和模型名。
 - 上传图片后可以调用外部 Vision LLM API。
 - 可以调用 Text LLM API 生成防治建议和前端 AI 助手回答。
+- 前端可获取定位和天气，`/api/predict` 能结合天气、湿度、降水和气候带生成建议。
 - 重启服务器后，NSSM 管理的后端服务自动恢复。
 
 后续功能完成后再补充验证：

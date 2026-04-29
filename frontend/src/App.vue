@@ -5,6 +5,7 @@ import { askAssistant } from './api/chat'
 import { fetchHealth } from './api/health'
 import { deleteHistoryRecord, fetchHistory, fetchHistoryRecord } from './api/history'
 import { predictImage } from './api/predict'
+import { fetchWeather } from './api/weather'
 
 const health = ref(null)
 const healthLoading = ref(false)
@@ -34,12 +35,16 @@ const chatQuestion = ref('')
 const chatLoading = ref(false)
 const chatError = ref('')
 const chatMessages = ref([])
+const locationLoading = ref(false)
+const locationError = ref('')
+const weatherContext = ref(null)
 
 const historyPage = computed(() => Math.floor(historyOffset.value / historyLimit.value) + 1)
 const historyPageCount = computed(() => Math.max(1, Math.ceil(historyTotal.value / historyLimit.value)))
 const canPrevHistory = computed(() => historyOffset.value > 0)
 const canNextHistory = computed(() => historyOffset.value + historyLimit.value < historyTotal.value)
 const authTitle = computed(() => (authMode.value === 'login' ? '用户登录' : '用户注册'))
+const environmentReady = computed(() => Boolean(weatherContext.value))
 
 const serviceState = computed(() => {
   if (healthLoading.value) return '检测中'
@@ -87,13 +92,40 @@ async function submitPredict() {
   predictError.value = ''
 
   try {
-    predictResult.value = await predictImage(selectedFile.value)
+    predictResult.value = await predictImage(selectedFile.value, weatherContext.value)
+    if (predictResult.value.weather) weatherContext.value = predictResult.value.weather
     await loadHistory()
   } catch (err) {
     predictResult.value = null
     predictError.value = err instanceof Error ? err.message : '识别失败'
   } finally {
     predictLoading.value = false
+  }
+}
+
+async function loadWeatherFromBrowser() {
+  if (!navigator.geolocation) {
+    locationError.value = '当前浏览器不支持定位。'
+    return
+  }
+
+  locationLoading.value = true
+  locationError.value = ''
+
+  try {
+    const position = await new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(resolve, reject, {
+        enableHighAccuracy: false,
+        timeout: 10000,
+        maximumAge: 10 * 60 * 1000,
+      })
+    })
+    const { latitude, longitude } = position.coords
+    weatherContext.value = await fetchWeather(latitude, longitude, '浏览器定位')
+  } catch (err) {
+    locationError.value = err instanceof Error ? err.message : '定位或天气获取失败'
+  } finally {
+    locationLoading.value = false
   }
 }
 
@@ -214,6 +246,9 @@ function buildChatContext() {
     `风险等级：${predictResult.value.risk_level}`,
     `摘要：${predictResult.value.summary}`,
     predictResult.value.suggestions?.length ? `建议：${predictResult.value.suggestions.join('；')}` : '',
+    weatherContext.value
+      ? `环境：${weatherContext.value.climate_zone}，${weatherContext.value.weather_text || '天气未知'}，气温 ${weatherContext.value.temperature_c ?? '未知'}°C，湿度 ${weatherContext.value.relative_humidity_percent ?? '未知'}%。`
+      : '',
   ]
     .filter(Boolean)
     .join('\n')
@@ -257,6 +292,11 @@ function formatTime(value) {
   }).format(date)
 }
 
+function formatCoordinate(value) {
+  if (value === null || value === undefined) return '未知'
+  return Number(value).toFixed(4)
+}
+
 onMounted(async () => {
   checkBackend()
   await restoreSession()
@@ -283,6 +323,51 @@ onMounted(async () => {
             {{ healthLoading ? '检测中...' : '重新检测' }}
           </button>
         </div>
+      </div>
+    </section>
+
+    <section class="environment-panel">
+      <div class="environment-copy">
+        <p class="panel-k">环境上下文</p>
+        <h2>定位与天气</h2>
+        <p>
+          获取浏览器定位后，后端会查询天气并判断气候带。图片识别时会把这些信息交给 Vision LLM，用于生成更贴近当地气候和病害风险的建议。
+        </p>
+      </div>
+      <div class="environment-actions">
+        <button type="button" @click="loadWeatherFromBrowser" :disabled="locationLoading">
+          {{ locationLoading ? '获取中...' : environmentReady ? '重新获取' : '获取定位和天气' }}
+        </button>
+        <p v-if="locationError" class="error-text">{{ locationError }}</p>
+      </div>
+      <dl v-if="weatherContext" class="weather-grid">
+        <div>
+          <dt>气候带</dt>
+          <dd>{{ weatherContext.climate_zone }}</dd>
+        </div>
+        <div>
+          <dt>天气</dt>
+          <dd>{{ weatherContext.weather_text || '未知' }}</dd>
+        </div>
+        <div>
+          <dt>气温</dt>
+          <dd>{{ weatherContext.temperature_c ?? '未知' }}°C</dd>
+        </div>
+        <div>
+          <dt>湿度</dt>
+          <dd>{{ weatherContext.relative_humidity_percent ?? '未知' }}%</dd>
+        </div>
+        <div>
+          <dt>降水</dt>
+          <dd>{{ weatherContext.precipitation_mm ?? '未知' }} mm</dd>
+        </div>
+        <div>
+          <dt>坐标</dt>
+          <dd>{{ formatCoordinate(weatherContext.latitude) }}, {{ formatCoordinate(weatherContext.longitude) }}</dd>
+        </div>
+      </dl>
+      <div v-else class="weather-empty">
+        <p>尚未获取环境上下文。未获取时仍可识别图片，但建议不会结合实时天气。</p>
       </div>
     </section>
 

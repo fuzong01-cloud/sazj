@@ -1,5 +1,7 @@
 from pydantic import BaseModel, Field
 
+from app.schemas.weather import WeatherContext
+
 
 class PredictResponse(BaseModel):
     ok: bool = True
@@ -13,3 +15,4 @@ class PredictResponse(BaseModel):
     summary: str
     suggestions: list[str] = Field(default_factory=list)
     raw_text: str | None = None
+    weather: WeatherContext | None = None

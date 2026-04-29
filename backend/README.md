@@ -1,6 +1,6 @@
 # 后端服务
 
-本目录是薯安智检的 FastAPI 后端。当前后端提供健康检查、用户注册登录、全局模型配置后台、Provider 测试连接、外部 Vision/Text Provider 调用、识别记录持久化和历史记录查询。
+本目录是薯安智检的 FastAPI 后端。当前后端提供健康检查、用户注册登录、全局模型配置后台、Provider 测试连接、天气查询、外部 Vision/Text Provider 调用、识别记录持久化和历史记录查询。
 
 ## 本地启动
 
@@ -81,6 +81,7 @@ DB_POOL_RECYCLE=1800
 - `PUT /api/model-configs/{id}`
 - `DELETE /api/model-configs/{id}`
 - `POST /api/predict`
+- `GET /api/weather`
 - `GET /api/history?limit=20&offset=0`
 - `GET /api/history/{id}`
 - `DELETE /api/history/{id}`
@@ -91,6 +92,8 @@ DB_POOL_RECYCLE=1800
 ## 注意事项
 
 - 当前识别通过后端管理员配置的全局 Vision LLM API 完成，不加载本地 TensorFlow 模型。
+- `/api/predict` 可接收 `latitude`、`longitude`、`location_label` 表单字段，后端会查询天气并传给 VisionProvider。
+- `/api/weather` 使用 Open-Meteo 查询当前天气，并按纬度粗分气候带。
 - 当前防治建议和聊天通过后端管理员配置的全局 Text LLM API 完成。
 - Provider API Key 会加密后入库。
 - `/api/model-configs` 需要 `X-Admin-Token`，普通用户不应直接操作模型配置。

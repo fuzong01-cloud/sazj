@@ -1,5 +1,30 @@
 # 版本历史
 
+## v0.5.6 weather-aware prediction baseline
+
+日期：2026-04-29
+
+该版本新增定位、天气和气候带上下文，并接入图片识别提示词。
+
+本基线已完成：
+
+- 新增 `backend/app/api/weather.py`。
+- 新增 `backend/app/schemas/weather.py`。
+- 新增 `backend/app/services/weather_service.py`。
+- 新增 `GET /api/weather`，根据经纬度查询当前天气。
+- 后端按纬度粗分气候带：热带、亚热带、温带、高纬/寒温带。
+- `/api/predict` 新增 `latitude`、`longitude`、`location_label` 表单字段。
+- VisionProvider 调用时会把位置、天气、湿度、降水、气候带传入提示词。
+- 前端新增“定位与天气”面板，使用浏览器定位并显示天气信息。
+- 前端上传图片时会把经纬度一并提交给后端。
+- AI 助手上下文会附带最近一次识别结果和天气摘要。
+
+已知限制：
+
+- 天气上下文暂未保存到 `prediction_records` 表。
+- 气候带判断是按纬度粗分，尚未结合海拔、季风区、地形和长期气候统计。
+- VisionProvider 图片能力仍取决于后端配置的外部模型。
+
 ## v0.5.5 provider test and assistant baseline
 
 日期：2026-04-29

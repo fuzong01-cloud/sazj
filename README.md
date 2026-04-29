@@ -6,7 +6,7 @@
 
 ## 当前状态
 
-- 版本基线：`v0.5.5 provider test and assistant baseline`。
+- 版本基线：`v0.5.6 weather-aware prediction baseline`。
 - 当前后端入口：`backend/app/main.py`。
 - 当前前端入口：`frontend/src/main.js`。
 - 当前识别接口：`POST /api/predict`，通过平台后端统一配置的 Vision LLM API 完成。
@@ -20,6 +20,7 @@
 - 用户上下文：前端支持登录/注册和本地 token 管理；登录后识别记录会绑定当前用户，历史记录优先返回当前用户数据。
 - 前端历史记录：主页面已展示最近识别记录，点击记录可查看摘要、建议、置信度和原始模型输出。
 - 前端 AI 助手：主页面已提供病害问答入口，调用后端 TextProvider。
+- 定位天气：前端可获取浏览器定位，后端查询天气并判断气候带，识别时会把环境上下文传给 VisionProvider。
 - 旧本地模型：`final_model.h5` 仅作为 legacy 资料，不参与运行。
 - 默认部署目标：Windows Server 轻量云服务器，2 核 CPU、2GB 内存、40GB 存储。
 
@@ -158,6 +159,18 @@ http://127.0.0.1:8000/admin/providers
 
 VisionProvider 用于图片识别，TextProvider 用于 AI 助手和防治建议。二者可以配置为不同厂商、不同 Base URL、不同 API Key 和不同模型名。管理页中的“测试连接”按钮会验证当前 provider 的 Base URL、API Key 和模型名是否能完成基础 `chat/completions` 调用。
 
+## 定位、天气和气候带
+
+前端主页面提供“获取定位和天气”按钮。用户授权浏览器定位后，前端只把经纬度传给后端：
+
+```text
+GET /api/weather?latitude=31.2&longitude=121.5
+```
+
+后端使用 Open-Meteo Forecast API 查询当前天气，并按纬度粗分气候带：热带、亚热带、温带、高纬/寒温带。
+
+上传图片识别时，前端会把经纬度一并提交给 `/api/predict`。后端重新获取天气上下文后再调用 VisionProvider，让大模型结合图片、天气、湿度、降水、气候带等信息输出更专业的防治建议。
+
 ## 识别记录
 
 `POST /api/predict` 成功调用 VisionProvider 后，会写入 `prediction_records` 表。当前保存 provider 名称、模型名、疾病名称、风险等级、置信度、摘要、建议、原始模型文本、上传文件名、图片 Content-Type 和创建时间。
@@ -167,6 +180,7 @@ VisionProvider 用于图片识别，TextProvider 用于 AI 助手和防治建议
 - `GET /api/history?limit=20&offset=0`
 - `GET /api/history/{id}`
 - `DELETE /api/history/{id}`
+- `GET /api/weather?latitude=...&longitude=...`
 
 当前阶段还没有用户系统和图片文件持久化，因此识别记录暂未绑定用户，也不保存原图路径。用户系统完成后，历史记录接口会改为只返回当前用户的数据。
 
@@ -189,8 +203,9 @@ VisionProvider 用于图片识别，TextProvider 用于 AI 助手和防治建议
 ## 开发计划
 
 1. 补充图片文件保存。
-2. 增加前端登录态路由保护和用户资料页。
-3. 持久化区域统计和日志。
-4. 增加知识库增强、防治建议管理、风险预警和统计看板。
-5. 按演示稳定性决定是否从 SQLite 切换 PostgreSQL。
-6. 清理或迁移 legacy 模型、Notebook、Colab、Kaggle 残留资料。
+2. 将天气上下文保存到识别历史。
+3. 增加前端登录态路由保护和用户资料页。
+4. 持久化区域统计和日志。
+5. 增加知识库增强、防治建议管理、风险预警和统计看板。
+6. 按演示稳定性决定是否从 SQLite 切换 PostgreSQL。
+7. 清理或迁移 legacy 模型、Notebook、Colab、Kaggle 残留资料。

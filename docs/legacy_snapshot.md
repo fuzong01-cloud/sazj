@@ -25,6 +25,7 @@
 - 当前模型配置改为后端管理员维护的全局配置，普通用户前端不暴露 API Key 配置入口。
 - 后端已提供 `/admin/providers` WebUI，用 `ADMIN_WEBUI_TOKEN` 进入，并支持 provider 测试连接。
 - 前端已提供 AI 助手面板，调用后端 TextProvider。
+- 前端已提供定位和天气展示；后端 `/api/weather` 使用 Open-Meteo，并将天气/气候带上下文接入 `/api/predict`。
 
 ## v0.4.0 数据库接入状态
 
@@ -79,6 +80,7 @@
 - `DELETE /api/model-configs/{id}`
 - `GET /admin/providers`
 - `POST /api/predict`
+- `GET /api/weather`
 - `GET /api/history`
 - `GET /api/history/{id}`
 - `DELETE /api/history/{id}`

@@ -59,6 +59,8 @@ http://服务器公网IP/admin/providers
 
 VisionProvider 和 TextProvider 可以分别配置不同 API。图片识别使用 VisionProvider；防治建议和前端 AI 助手使用 TextProvider。
 
+天气能力由后端调用 Open-Meteo Forecast API，不需要额外 API Key，但服务器需要允许访问外网 HTTPS。
+
 ## 登录令牌密钥
 
 `JWT_SECRET_KEY` 用于签发登录访问令牌。要求：
