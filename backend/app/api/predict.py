@@ -24,6 +24,7 @@ async def predict_image(
     provider_id: int | None = Form(default=None),
     conversation_id: int | None = Form(default=None),
     prompt: str | None = Form(default=None),
+    deep_thinking: bool = Form(default=False),
     current_user: UserPublic = Depends(get_current_user),
 ) -> PredictResponse:
     image_bytes = await file.read()
@@ -45,6 +46,7 @@ async def predict_image(
                 "filename": file.filename or "",
                 "content_type": file.content_type or "",
                 "has_weather": latitude is not None and longitude is not None,
+                "deep_thinking": deep_thinking,
             },
         )
     )
@@ -63,6 +65,7 @@ async def predict_image(
             content_type=file.content_type or "",
             user_id=current_user.id,
             prompt=user_prompt,
+            deep_thinking=deep_thinking,
             weather=weather,
             provider_id=provider_id,
         )

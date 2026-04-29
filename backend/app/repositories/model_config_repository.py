@@ -21,6 +21,9 @@ def _to_schema(row: ModelConfig) -> ModelConfigStored:
         api_key=decrypt_provider_secret(row.api_key),
         model_name=row.model_name,
         enabled=row.enabled,
+        supports_reasoning=bool(getattr(row, "supports_reasoning", False)),
+        max_context_tokens=getattr(row, "max_context_tokens", None),
+        max_output_tokens=getattr(row, "max_output_tokens", None),
     )
 
 
@@ -86,17 +89,22 @@ def delete_config(config_id: int, user_id: int | None = None) -> bool:
 def get_enabled_provider(
     provider_type: ProviderType,
     user_id: int | None = None,
+    prefer_reasoning: bool | None = None,
 ) -> ModelConfigStored | None:
     with SessionLocal() as session:
-        row = session.scalars(
-            select(ModelConfig)
-            .where(
-                _user_filter(user_id),
-                ModelConfig.provider_type == provider_type.value,
-                ModelConfig.enabled.is_(True),
-            )
-            .order_by(ModelConfig.id.asc())
-        ).first()
+        statement = select(ModelConfig).where(
+            _user_filter(user_id),
+            ModelConfig.provider_type == provider_type.value,
+            ModelConfig.enabled.is_(True),
+        )
+        if prefer_reasoning is not None:
+            preferred = session.scalars(
+                statement.where(ModelConfig.supports_reasoning.is_(prefer_reasoning)).order_by(ModelConfig.id.asc())
+            ).first()
+            if preferred is not None:
+                return _to_schema(preferred)
+
+        row = session.scalars(statement.order_by(ModelConfig.supports_reasoning.asc(), ModelConfig.id.asc())).first()
         return _to_schema(row) if row else None
 
 

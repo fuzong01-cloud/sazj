@@ -82,10 +82,16 @@ def save_provider(
     model_name: str = Form(...),
     api_key: str = Form(default=""),
     enabled: str | None = Form(default=None),
+    supports_reasoning: str | None = Form(default=None),
+    max_context_tokens: str = Form(default=""),
+    max_output_tokens: str = Form(default=""),
     config_id: int | None = Form(default=None),
 ) -> RedirectResponse:
     verify_admin_token(token)
     is_enabled = enabled == "on"
+    is_reasoning = supports_reasoning == "on"
+    context_limit = _parse_optional_int(max_context_tokens)
+    output_limit = _parse_optional_int(max_output_tokens)
 
     if config_id:
         payload = {
@@ -94,6 +100,9 @@ def save_provider(
             "base_url": base_url.strip().rstrip("/"),
             "model_name": model_name.strip(),
             "enabled": is_enabled,
+            "supports_reasoning": is_reasoning,
+            "max_context_tokens": context_limit,
+            "max_output_tokens": output_limit,
         }
         if api_key.strip():
             payload["api_key"] = api_key.strip()
@@ -107,6 +116,9 @@ def save_provider(
                 api_key=api_key.strip(),
                 model_name=model_name.strip(),
                 enabled=is_enabled,
+                supports_reasoning=is_reasoning,
+                max_context_tokens=context_limit,
+                max_output_tokens=output_limit,
             ),
             user_id=None,
         )
@@ -152,6 +164,9 @@ def _render_form(token: str, config=None) -> str:
     base_url = "" if config is None else escape(config.base_url)
     model_name = "" if config is None else escape(config.model_name)
     checked = "checked" if config is None or config.enabled else ""
+    reasoning_checked = "checked" if config is not None and config.supports_reasoning else ""
+    max_context_tokens = "" if config is None or config.max_context_tokens is None else str(config.max_context_tokens)
+    max_output_tokens = "" if config is None or config.max_output_tokens is None else str(config.max_output_tokens)
     api_key_required = "required" if config is None else ""
     api_key_placeholder = "新增时必填" if config is None else "留空则保留原密钥"
 
@@ -170,8 +185,17 @@ def _render_form(token: str, config=None) -> str:
       <label>模型名称
         <input name="model_name" value="{model_name}" required>
       </label>
+      <label>上下文长度上限（tokens，可留空）
+        <input name="max_context_tokens" type="number" min="256" max="2000000" value="{max_context_tokens}" placeholder="例如 8192">
+      </label>
+      <label>输出长度上限（max_tokens，可留空）
+        <input name="max_output_tokens" type="number" min="16" max="65536" value="{max_output_tokens}" placeholder="例如 1024">
+      </label>
       <label>API Key / Token
         <input name="api_key" type="password" placeholder="{api_key_placeholder}" autocomplete="off" {api_key_required}>
+      </label>
+      <label class="check">
+        <input name="supports_reasoning" type="checkbox" {reasoning_checked}> 深度思考/推理模型
       </label>
       <label class="check">
         <input name="enabled" type="checkbox" {checked}> 启用该配置
@@ -187,11 +211,12 @@ def _render_config_card(config, token: str) -> str:
       <div class="card-head">
         <div>
           <strong>{escape(config.provider_name)}</strong>
-          <span>通用模型 / {escape(config.model_name)}</span>
+          <span>{'深度思考模型' if config.supports_reasoning else '非推理快速模型'} / {escape(config.model_name)}</span>
         </div>
         <em class="badge {'on' if config.enabled else ''}">{'启用' if config.enabled else '停用'}</em>
       </div>
       <p>{escape(config.base_url)}</p>
+      <p class="muted">上下文：{config.max_context_tokens or '默认'} tokens；输出：{config.max_output_tokens or '默认'} tokens</p>
       <p class="muted">API Key：已加密保存，页面不回显明文。</p>
       <details>
         <summary>编辑</summary>
@@ -228,6 +253,13 @@ def _redirect_with_test_result(token: str, ok: bool, message: str) -> RedirectRe
         }
     )
     return RedirectResponse(url=f"/admin/providers?{params}", status_code=303)
+
+
+def _parse_optional_int(value: str) -> int | None:
+    text = (value or "").strip()
+    if not text:
+        return None
+    return int(text)
 
 
 def _page(title: str, body: str) -> str:

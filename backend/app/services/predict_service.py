@@ -21,18 +21,20 @@ class PredictionService:
         content_type: str,
         user_id: int | None = None,
         prompt: str | None = None,
+        deep_thinking: bool = False,
         weather: WeatherContext | None = None,
         provider_id: int | None = None,
     ) -> PredictResponse:
         if not image_bytes:
             raise InvalidImageError("请上传一张图片")
 
-        provider = get_enabled_vision_provider(provider_id)
+        provider = get_enabled_vision_provider(provider_id, deep_thinking=deep_thinking)
         result = await provider.predict(
             image_bytes=image_bytes,
             filename=filename,
             content_type=content_type,
             user_prompt=prompt,
+            deep_thinking=deep_thinking,
             weather=weather,
         )
         record = create_prediction_record(

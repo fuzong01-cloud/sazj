@@ -17,6 +17,9 @@ class ModelConfig(Base):
     api_key: Mapped[str] = mapped_column(Text, nullable=False)
     model_name: Mapped[str] = mapped_column(String(120), nullable=False)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
+    supports_reasoning: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
+    max_context_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    max_output_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

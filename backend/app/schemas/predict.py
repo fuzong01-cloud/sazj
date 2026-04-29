@@ -17,4 +17,5 @@ class PredictResponse(BaseModel):
     suggestions: list[str] = Field(default_factory=list)
     content: str | None = None
     raw_text: str | None = None
+    reasoning_content: str | None = None
     weather: WeatherContext | None = None

@@ -1,4 +1,5 @@
 import copy
+from dataclasses import dataclass
 import logging
 from typing import Any
 
@@ -9,6 +10,13 @@ logger = logging.getLogger(__name__)
 
 class ChatCompletionsRuntimeError(RuntimeError):
     pass
+
+
+@dataclass(frozen=True)
+class ChatCompletionsMessage:
+    content: str
+    reasoning_content: str = ""
+    finish_reason: str | None = None
 
 
 async def post_chat_completions(config, payload: dict[str, Any], *, timeout: int = 60) -> dict[str, Any]:
@@ -61,16 +69,42 @@ def extract_upstream_error_message(response_text: str) -> str:
 
 
 def extract_chat_content(data: dict[str, Any]) -> str:
+    return extract_chat_message(data).content
+
+
+def extract_chat_message(data: dict[str, Any]) -> ChatCompletionsMessage:
     try:
-        content = data["choices"][0]["message"]["content"]
+        choice = data["choices"][0]
+        message = choice["message"]
+        content = message.get("content")
     except (KeyError, IndexError, TypeError) as exc:
         raise ChatCompletionsRuntimeError("响应格式不符合 OpenAI-compatible chat/completions") from exc
 
     if isinstance(content, str):
-        return content.strip()
-    if isinstance(content, list):
-        return "\n".join(str(item.get("text", "")) for item in content if isinstance(item, dict)).strip()
-    return str(content).strip()
+        text = content.strip()
+    elif isinstance(content, list):
+        text = "\n".join(str(item.get("text", "")) for item in content if isinstance(item, dict)).strip()
+    elif content is None:
+        text = ""
+    else:
+        text = str(content).strip()
+
+    finish_reason = choice.get("finish_reason")
+    reasoning_content = str(message.get("reasoning_content") or "").strip()
+    if text:
+        return ChatCompletionsMessage(
+            content=text,
+            reasoning_content=reasoning_content,
+            finish_reason=str(finish_reason) if finish_reason is not None else None,
+        )
+
+    if reasoning_content:
+        return ChatCompletionsMessage(
+            content="",
+            reasoning_content=reasoning_content,
+            finish_reason=str(finish_reason) if finish_reason is not None else None,
+        )
+    raise ChatCompletionsRuntimeError("模型返回的 message.content 为空。")
 
 
 def sanitize_payload_for_log(payload: dict[str, Any]) -> dict[str, Any]:

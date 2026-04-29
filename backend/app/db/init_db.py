@@ -23,6 +23,9 @@ def _ensure_prediction_records_user_id() -> None:
 
 def _ensure_model_configs_user_id() -> None:
     _ensure_nullable_integer_column("model_configs", "user_id")
+    _ensure_nullable_integer_column("model_configs", "max_context_tokens")
+    _ensure_nullable_integer_column("model_configs", "max_output_tokens")
+    _ensure_boolean_column("model_configs", "supports_reasoning", default=0)
 
 
 def _ensure_users_profile_columns() -> None:
@@ -32,6 +35,19 @@ def _ensure_users_profile_columns() -> None:
 
 def _ensure_nullable_integer_column(table_name: str, column_name: str) -> None:
     _ensure_nullable_text_column(table_name, column_name, "INTEGER")
+
+
+def _ensure_boolean_column(table_name: str, column_name: str, default: int = 0) -> None:
+    inspector = inspect(engine)
+    if table_name not in inspector.get_table_names():
+        return
+
+    columns = {column["name"] for column in inspector.get_columns(table_name)}
+    if column_name in columns:
+        return
+
+    with engine.begin() as connection:
+        connection.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} BOOLEAN NOT NULL DEFAULT {default}"))
 
 
 def _ensure_nullable_text_column(table_name: str, column_name: str, column_type: str) -> None:

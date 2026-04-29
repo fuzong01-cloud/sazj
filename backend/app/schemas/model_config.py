@@ -13,6 +13,9 @@ class ModelConfigBase(BaseModel):
     base_url: str = Field(min_length=1)
     model_name: str = Field(min_length=1, max_length=120)
     enabled: bool = True
+    supports_reasoning: bool = False
+    max_context_tokens: int | None = Field(default=None, ge=256, le=2_000_000)
+    max_output_tokens: int | None = Field(default=None, ge=16, le=65_536)
 
 
 class ModelConfigCreate(ModelConfigBase):
@@ -26,6 +29,9 @@ class ModelConfigUpdate(BaseModel):
     api_key: str | None = Field(default=None, min_length=1)
     model_name: str | None = Field(default=None, min_length=1, max_length=120)
     enabled: bool | None = None
+    supports_reasoning: bool | None = None
+    max_context_tokens: int | None = Field(default=None, ge=256, le=2_000_000)
+    max_output_tokens: int | None = Field(default=None, ge=16, le=65_536)
 
 
 class ModelConfigStored(ModelConfigBase):
@@ -45,6 +51,9 @@ class ModelConfigChoice(BaseModel):
     provider_name: str
     provider_type: ProviderType
     model_name: str
+    supports_reasoning: bool = False
+    max_context_tokens: int | None = None
+    max_output_tokens: int | None = None
 
 
 def mask_api_key(api_key: str) -> str:
@@ -62,5 +71,8 @@ def to_public(config: ModelConfigStored) -> ModelConfigPublic:
         base_url=config.base_url,
         model_name=config.model_name,
         enabled=config.enabled,
+        supports_reasoning=config.supports_reasoning,
+        max_context_tokens=config.max_context_tokens,
+        max_output_tokens=config.max_output_tokens,
         api_key_masked=mask_api_key(config.api_key),
     )

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import {
   changePassword,
   fetchMe,
@@ -82,6 +82,7 @@ const sidebarCollapsed = ref(false)
 const providers = ref([])
 const providerError = ref('')
 const selectedProviderId = ref('')
+const deepThinking = ref(false)
 
 const historyPage = computed(() => Math.floor(historyOffset.value / historyLimit.value) + 1)
 const historyPageCount = computed(() => Math.max(1, Math.ceil(historyTotal.value / historyLimit.value)))
@@ -97,6 +98,8 @@ const modelProviders = computed(() => providers.value)
 const activeProvider = computed(() =>
   modelProviders.value.find((provider) => String(provider.id) === String(selectedProviderId.value)),
 )
+const quickProviders = computed(() => modelProviders.value.filter((provider) => !provider.supports_reasoning))
+const reasoningProviders = computed(() => modelProviders.value.filter((provider) => provider.supports_reasoning))
 
 const filteredHistoryRecords = computed(() => {
   const keyword = searchKeyword.value.trim().toLowerCase()
@@ -127,6 +130,16 @@ function resolveAssetUrl(value) {
   return `${backendOrigin.value}${value}`
 }
 
+watch(deepThinking, (enabled) => {
+  if (!modelProviders.value.length) return
+  const current = activeProvider.value
+  if (enabled && current?.supports_reasoning) return
+  if (!enabled && current && !current.supports_reasoning) return
+
+  const pool = enabled ? reasoningProviders.value : quickProviders.value
+  if (pool.length) selectedProviderId.value = String(pool[0].id)
+})
+
 async function checkBackend() {
   healthLoading.value = true
   healthError.value = ''
@@ -146,8 +159,9 @@ async function loadProviders() {
     providers.value = await fetchEnabledProviders()
     if (!selectedProviderId.value && modelProviders.value.length) {
       const preferred =
+        quickProviders.value.find((provider) => provider.model_name === 'kimi-k2.6') ||
+        quickProviders.value[0] ||
         modelProviders.value.find((provider) => provider.model_name === 'kimi-k2.6') ||
-        modelProviders.value.find((provider) => !String(provider.model_name).includes('kimi-k2.5')) ||
         modelProviders.value[0]
       selectedProviderId.value = String(preferred.id)
     }
@@ -366,6 +380,7 @@ async function selectHistory(record) {
       return {
         role: item.role,
         text: item.content,
+        reasoning: payload.reasoning_content || '',
         provider:
           item.provider_name && item.model_name
             ? `${item.provider_name} / ${item.model_name}`
@@ -618,11 +633,13 @@ async function submitTextMessage(text) {
       context,
       provider_id: selectedProviderId.value ? Number(selectedProviderId.value) : null,
       conversation_id: currentConversationId.value,
+      deep_thinking: deepThinking.value,
     })
     currentConversationId.value = result.conversation_id || currentConversationId.value
     messages.value.push({
       role: 'assistant',
       text: result.answer || '模型未返回有效内容',
+      reasoning: result.reasoning_content || '',
       provider: `${result.provider_name} / ${result.model_name}`,
     })
     await loadHistory()
@@ -661,6 +678,7 @@ async function submitImageMessage(text, imageAttachment) {
       selectedProviderId.value ? Number(selectedProviderId.value) : null,
       currentConversationId.value,
       prompt,
+      deepThinking.value,
     )
     currentConversationId.value = result.conversation_id || currentConversationId.value
     predictResult.value = result
@@ -691,6 +709,59 @@ function normalizeModelError(message) {
     return '当前模型过载，请切换到 kimi-k2.6 或稍后重试。'
   }
   return value
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+function renderMarkdown(value) {
+  const source = String(value || '')
+  const codeBlocks = []
+  let html = escapeHtml(source).replace(/```([\s\S]*?)```/g, (_match, code) => {
+    const index = codeBlocks.length
+    codeBlocks.push(`<pre><code>${code.trim()}</code></pre>`)
+    return `\n@@CODE_BLOCK_${index}@@\n`
+  })
+
+  html = html
+    .replace(/^### (.*)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.*)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.*)$/gm, '<h1>$1</h1>')
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>')
+
+  html = html.replace(/(?:^|\n)((?:[-*] .+(?:\n|$))+)/g, (match, list) => {
+    const items = list
+      .trim()
+      .split(/\n/)
+      .map((line) => `<li>${line.replace(/^[-*] /, '')}</li>`)
+      .join('')
+    return `${match.startsWith('\n') ? '\n' : ''}<ul>${items}</ul>\n`
+  })
+
+  html = html
+    .split(/\n{2,}/)
+    .map((block) => {
+      const trimmed = block.trim()
+      if (!trimmed) return ''
+      if (/^<(h1|h2|h3|ul|pre)/.test(trimmed) || /^@@CODE_BLOCK_\d+@@$/.test(trimmed)) {
+        return trimmed
+      }
+      return `<p>${trimmed.replace(/\n/g, '<br>')}</p>`
+    })
+    .join('')
+
+  codeBlocks.forEach((block, index) => {
+    html = html.replace(`@@CODE_BLOCK_${index}@@`, block)
+  })
+  return html
 }
 
 function inferFileType(name) {
@@ -867,9 +938,13 @@ onMounted(async () => {
             <select v-model="selectedProviderId">
               <option value="" disabled>请选择模型</option>
               <option v-for="provider in modelProviders" :key="provider.id" :value="String(provider.id)">
-                {{ provider.provider_name }} / {{ provider.model_name }}
+                {{ provider.provider_name }} / {{ provider.model_name }}{{ provider.supports_reasoning ? ' · 深度' : ' · 快速' }}
               </option>
             </select>
+          </label>
+          <label class="thinking-toggle" title="关闭时优先使用非推理快速模型，开启时优先使用深度思考模型">
+            <input v-model="deepThinking" type="checkbox" />
+            <span>深度思考</span>
           </label>
           <button type="button" title="刷新模型列表" @click="loadProviders">刷新</button>
         </div>
@@ -932,7 +1007,11 @@ onMounted(async () => {
         <article v-for="(message, index) in messages" :key="index" class="message" :class="message.role">
           <div class="avatar">{{ message.role === 'user' ? '你' : 'AI' }}</div>
           <div class="message-content">
-            <p v-if="message.text">{{ message.text }}</p>
+            <div v-if="message.text" class="markdown-body" v-html="renderMarkdown(message.text)"></div>
+            <details v-if="message.reasoning" class="reasoning-block">
+              <summary>推理过程</summary>
+              <div class="markdown-body" v-html="renderMarkdown(message.reasoning)"></div>
+            </details>
             <img v-if="message.imageUrl" :src="message.imageUrl" alt="已上传图片预览" />
             <div v-if="message.files?.length" class="file-list">
               <span v-for="file in message.files" :key="file.name">
@@ -948,7 +1027,11 @@ onMounted(async () => {
                   </div>
                   <strong>{{ predictionStatus(message.result) }}</strong>
                 </div>
-                <p>{{ predictionContent(message.result) }}</p>
+                <div class="markdown-body" v-html="renderMarkdown(predictionContent(message.result))"></div>
+                <details v-if="message.result.reasoning_content" class="reasoning-block">
+                  <summary>推理过程</summary>
+                  <div class="markdown-body" v-html="renderMarkdown(message.result.reasoning_content)"></div>
+                </details>
                 <ul v-if="message.result.suggestions?.length" class="suggestion-list">
                   <li v-for="item in message.result.suggestions" :key="item">{{ item }}</li>
                 </ul>

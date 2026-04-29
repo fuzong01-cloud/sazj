@@ -16,6 +16,9 @@ def list_enabled_providers(
             provider_name=config.provider_name,
             provider_type=config.provider_type,
             model_name=config.model_name,
+            supports_reasoning=config.supports_reasoning,
+            max_context_tokens=config.max_context_tokens,
+            max_output_tokens=config.max_output_tokens,
         )
         for config in list_enabled_configs(provider_type=provider_type, user_id=None)
     ]

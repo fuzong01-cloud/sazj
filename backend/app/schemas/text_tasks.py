@@ -19,6 +19,7 @@ class ChatRequest(BaseModel):
     context: str | None = None
     provider_id: int | None = None
     conversation_id: int | None = None
+    deep_thinking: bool = False
 
 
 class ChatResponse(BaseModel):
@@ -26,4 +27,5 @@ class ChatResponse(BaseModel):
     provider_name: str
     model_name: str
     answer: str
+    reasoning_content: str | None = None
     conversation_id: int | None = None

@@ -1,12 +1,20 @@
 import { getAuthHeaders } from './auth'
 import { API_BASE_URL } from './health'
 
-export async function predictImage(file, environment = null, providerId = null, conversationId = null, prompt = '') {
+export async function predictImage(
+  file,
+  environment = null,
+  providerId = null,
+  conversationId = null,
+  prompt = '',
+  deepThinking = false,
+) {
   const body = new FormData()
   body.append('file', file)
   if (providerId) body.append('provider_id', String(providerId))
   if (conversationId) body.append('conversation_id', String(conversationId))
   if (prompt) body.append('prompt', prompt)
+  body.append('deep_thinking', deepThinking ? 'true' : 'false')
   if (environment?.latitude !== undefined && environment?.longitude !== undefined) {
     body.append('latitude', String(environment.latitude))
     body.append('longitude', String(environment.longitude))

@@ -31,20 +31,21 @@ async def chat(
             role="user",
             message_type="text",
             content=payload.question,
-            payload={"context": payload.context},
+            payload={"context": payload.context, "deep_thinking": payload.deep_thinking},
         )
     )
 
     try:
-        provider = get_enabled_text_provider(payload.provider_id)
+        provider = get_enabled_text_provider(payload.provider_id, deep_thinking=payload.deep_thinking)
         user_prompt = (
             f"上下文：{payload.context or '无'}\n"
             f"用户问题：{payload.question}\n"
             "请结合马铃薯病虫害识别和防治场景回答。"
         )
-        answer = await provider.generate(
+        result = await provider.generate(
             system_prompt="你是农业病害平台的网页 AI 助手，回答要简洁、谨慎、中文。",
             user_prompt=user_prompt,
+            deep_thinking=payload.deep_thinking,
         )
         add_message(
             ConversationMessageCreate(
@@ -52,15 +53,17 @@ async def chat(
                 user_id=current_user.id,
                 role="assistant",
                 message_type="text",
-                content=answer,
+                content=result.content,
                 provider_name=provider.config.provider_name,
                 model_name=provider.config.model_name,
+                payload={"reasoning_content": result.reasoning_content},
             )
         )
         return ChatResponse(
             provider_name=provider.config.provider_name,
             model_name=provider.config.model_name,
-            answer=answer,
+            answer=result.content,
+            reasoning_content=result.reasoning_content,
             conversation_id=conversation.id,
         )
     except TextProviderNotConfiguredError as exc:
