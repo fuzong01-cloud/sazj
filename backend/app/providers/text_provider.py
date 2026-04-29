@@ -57,7 +57,7 @@ class TextProvider:
 
 def get_enabled_text_provider(config_id: int | None = None) -> TextProvider:
     if config_id is not None:
-        config = get_enabled_provider_by_id(config_id, ProviderType.text, user_id=None)
+        config = get_enabled_provider_by_id(config_id, None, user_id=None)
     else:
         config = get_enabled_provider(ProviderType.text, user_id=None)
     if config is None:

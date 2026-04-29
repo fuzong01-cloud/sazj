@@ -74,8 +74,7 @@ const sidebarCollapsed = ref(false)
 
 const providers = ref([])
 const providerError = ref('')
-const selectedVisionProviderId = ref('')
-const selectedTextProviderId = ref('')
+const selectedProviderId = ref('')
 
 const historyPage = computed(() => Math.floor(historyOffset.value / historyLimit.value) + 1)
 const historyPageCount = computed(() => Math.max(1, Math.ceil(historyTotal.value / historyLimit.value)))
@@ -85,13 +84,9 @@ const isBusy = computed(() => chatLoading.value || predictLoading.value)
 const authTitle = computed(() => (authMode.value === 'login' ? '登录' : '注册'))
 const environmentReady = computed(() => Boolean(weatherContext.value))
 
-const visionProviders = computed(() => providers.value.filter((provider) => provider.provider_type === 'vision'))
-const textProviders = computed(() => providers.value.filter((provider) => provider.provider_type === 'text'))
-const activeVisionProvider = computed(() =>
-  visionProviders.value.find((provider) => String(provider.id) === String(selectedVisionProviderId.value)),
-)
-const activeTextProvider = computed(() =>
-  textProviders.value.find((provider) => String(provider.id) === String(selectedTextProviderId.value)),
+const modelProviders = computed(() => providers.value)
+const activeProvider = computed(() =>
+  modelProviders.value.find((provider) => String(provider.id) === String(selectedProviderId.value)),
 )
 
 const filteredHistoryRecords = computed(() => {
@@ -133,11 +128,8 @@ async function loadProviders() {
   providerError.value = ''
   try {
     providers.value = await fetchEnabledProviders()
-    if (!selectedVisionProviderId.value && visionProviders.value[0]) {
-      selectedVisionProviderId.value = String(visionProviders.value[0].id)
-    }
-    if (!selectedTextProviderId.value && textProviders.value[0]) {
-      selectedTextProviderId.value = String(textProviders.value[0].id)
+    if (!selectedProviderId.value && modelProviders.value[0]) {
+      selectedProviderId.value = String(modelProviders.value[0].id)
     }
   } catch (err) {
     providerError.value = err instanceof Error ? err.message : '模型列表获取失败'
@@ -475,7 +467,7 @@ async function submitTextMessage(text) {
     const result = await askAssistant({
       question: text,
       context,
-      provider_id: selectedTextProviderId.value ? Number(selectedTextProviderId.value) : null,
+      provider_id: selectedProviderId.value ? Number(selectedProviderId.value) : null,
     })
     messages.value.push({
       role: 'assistant',
@@ -508,7 +500,7 @@ async function submitImageMessage(text, imageAttachment) {
     const result = await predictImage(
       imageAttachment.file,
       weatherContext.value,
-      selectedVisionProviderId.value ? Number(selectedVisionProviderId.value) : null,
+      selectedProviderId.value ? Number(selectedProviderId.value) : null,
     )
     predictResult.value = result
     if (result.weather) weatherContext.value = result.weather
@@ -665,19 +657,10 @@ onMounted(async () => {
       <header class="topbar">
         <div class="model-picker">
           <label>
-            <span>文字模型</span>
-            <select v-model="selectedTextProviderId">
-              <option value="">默认 TextProvider</option>
-              <option v-for="provider in textProviders" :key="provider.id" :value="String(provider.id)">
-                {{ provider.provider_name }} / {{ provider.model_name }}
-              </option>
-            </select>
-          </label>
-          <label>
-            <span>视觉模型</span>
-            <select v-model="selectedVisionProviderId">
-              <option value="">默认 VisionProvider</option>
-              <option v-for="provider in visionProviders" :key="provider.id" :value="String(provider.id)">
+            <span>模型</span>
+            <select v-model="selectedProviderId">
+              <option value="">默认模型</option>
+              <option v-for="provider in modelProviders" :key="provider.id" :value="String(provider.id)">
                 {{ provider.provider_name }} / {{ provider.model_name }}
               </option>
             </select>

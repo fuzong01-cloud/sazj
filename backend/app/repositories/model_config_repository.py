@@ -119,7 +119,7 @@ def list_enabled_configs(
 
 def get_enabled_provider_by_id(
     config_id: int,
-    provider_type: ProviderType,
+    provider_type: ProviderType | None,
     user_id: int | None = None,
 ) -> ModelConfigStored | None:
     with SessionLocal() as session:
@@ -127,7 +127,7 @@ def get_enabled_provider_by_id(
         if (
             row is None
             or row.user_id != user_id
-            or row.provider_type != provider_type.value
+            or (provider_type is not None and row.provider_type != provider_type.value)
             or not row.enabled
         ):
             return None
