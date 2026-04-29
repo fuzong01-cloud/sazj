@@ -16,6 +16,8 @@ class UserLogin(BaseModel):
 class UserPublic(BaseModel):
     id: int
     username: str
+    email: str | None = None
+    avatar_url: str | None = None
     enabled: bool
     created_at: datetime
     last_login_at: datetime | None = None
@@ -25,3 +27,14 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserPublic
+
+
+class UserProfileUpdate(BaseModel):
+    username: str | None = Field(default=None, min_length=3, max_length=80, pattern=r"^[A-Za-z0-9_\-]+$")
+    email: str | None = Field(default=None, max_length=120)
+    avatar_url: str | None = Field(default=None, max_length=500)
+
+
+class PasswordChangeRequest(BaseModel):
+    current_password: str = Field(min_length=1, max_length=128)
+    new_password: str = Field(min_length=8, max_length=128)

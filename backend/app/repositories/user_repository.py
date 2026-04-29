@@ -5,13 +5,15 @@ from sqlalchemy import select
 from app.core.security import hash_password
 from app.db.session import SessionLocal
 from app.models.user import User
-from app.schemas.auth import UserCreate, UserPublic
+from app.schemas.auth import UserCreate, UserProfileUpdate, UserPublic
 
 
 def _to_public(row: User) -> UserPublic:
     return UserPublic(
         id=row.id,
         username=row.username,
+        email=row.email,
+        avatar_url=row.avatar_url,
         enabled=row.enabled,
         created_at=row.created_at,
         last_login_at=row.last_login_at,
@@ -27,6 +29,11 @@ def get_user_by_id(user_id: int) -> UserPublic | None:
 def get_user_row_by_username(username: str) -> User | None:
     with SessionLocal() as session:
         return session.scalars(select(User).where(User.username == username)).first()
+
+
+def get_user_row_by_id(user_id: int) -> User | None:
+    with SessionLocal() as session:
+        return session.get(User, user_id)
 
 
 def get_user_public_by_username(username: str) -> UserPublic | None:
@@ -56,3 +63,31 @@ def mark_user_login(user_id: int) -> UserPublic | None:
         session.commit()
         session.refresh(row)
         return _to_public(row)
+
+
+def update_user_profile(user_id: int, payload: UserProfileUpdate) -> UserPublic | None:
+    with SessionLocal() as session:
+        row = session.get(User, user_id)
+        if row is None:
+            return None
+
+        values = payload.model_dump(exclude_unset=True)
+        for key, value in values.items():
+            if isinstance(value, str):
+                value = value.strip() or None
+            setattr(row, key, value)
+
+        session.commit()
+        session.refresh(row)
+        return _to_public(row)
+
+
+def update_user_password(user_id: int, new_password: str) -> bool:
+    with SessionLocal() as session:
+        row = session.get(User, user_id)
+        if row is None:
+            return False
+
+        row.password_hash = hash_password(new_password)
+        session.commit()
+        return True

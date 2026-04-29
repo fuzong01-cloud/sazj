@@ -1,6 +1,14 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { fetchMe, getAccessToken, loginUser, registerUser, setAccessToken } from './api/auth'
+import {
+  changePassword,
+  fetchMe,
+  getAccessToken,
+  loginUser,
+  registerUser,
+  setAccessToken,
+  updateProfile,
+} from './api/auth'
 import { askAssistant } from './api/chat'
 import { fetchHealth } from './api/health'
 import { deleteHistoryRecord, fetchHistory, fetchHistoryRecord } from './api/history'
@@ -20,10 +28,14 @@ const authLoading = ref(false)
 const authError = ref('')
 const authModalOpen = ref(false)
 const profileModalOpen = ref(false)
+const profileLoading = ref(false)
+const profileError = ref('')
+const profileSuccess = ref('')
 const profileForm = ref({
   username: '',
   email: '',
   avatarUrl: '',
+  currentPassword: '',
   password: '',
 })
 
@@ -151,8 +163,9 @@ async function restoreSession() {
 function syncProfileForm() {
   profileForm.value = {
     username: currentUser.value?.username || '',
-    email: '',
-    avatarUrl: '',
+    email: currentUser.value?.email || '',
+    avatarUrl: currentUser.value?.avatar_url || '',
+    currentPassword: '',
     password: '',
   }
 }
@@ -169,6 +182,8 @@ function openProfileModal() {
     return
   }
   syncProfileForm()
+  profileError.value = ''
+  profileSuccess.value = ''
   profileModalOpen.value = true
 }
 
@@ -207,6 +222,41 @@ async function logout() {
   profileModalOpen.value = false
   historyOffset.value = 0
   await loadHistory()
+}
+
+async function submitProfile() {
+  if (!currentUser.value || profileLoading.value) return
+
+  profileLoading.value = true
+  profileError.value = ''
+  profileSuccess.value = ''
+
+  try {
+    currentUser.value = await updateProfile({
+      username: profileForm.value.username.trim(),
+      email: profileForm.value.email.trim() || null,
+      avatar_url: profileForm.value.avatarUrl.trim() || null,
+    })
+
+    if (profileForm.value.password) {
+      if (!profileForm.value.currentPassword) {
+        throw new Error('修改密码需要填写当前密码')
+      }
+      await changePassword({
+        current_password: profileForm.value.currentPassword,
+        new_password: profileForm.value.password,
+      })
+      profileForm.value.currentPassword = ''
+      profileForm.value.password = ''
+    }
+
+    syncProfileForm()
+    profileSuccess.value = '资料已保存'
+  } catch (err) {
+    profileError.value = err instanceof Error ? err.message : '资料保存失败'
+  } finally {
+    profileLoading.value = false
+  }
 }
 
 function switchAuthMode(mode) {
@@ -601,7 +651,7 @@ onMounted(async () => {
 
       <button type="button" class="account-entry" @click="openProfileModal">
         <span class="account-avatar">
-          <img v-if="profileForm.avatarUrl" :src="profileForm.avatarUrl" alt="用户头像" />
+          <img v-if="currentUser?.avatar_url" :src="currentUser.avatar_url" alt="用户头像" />
           <span v-else>{{ currentUser?.username?.slice(0, 1)?.toUpperCase() || '登' }}</span>
         </span>
         <span class="account-copy">
@@ -838,7 +888,7 @@ onMounted(async () => {
       <section v-if="profileModalOpen" class="modal-card">
         <button type="button" class="modal-close" @click="closeModals">×</button>
         <h2>个人信息</h2>
-        <form class="profile-form">
+        <form class="profile-form" @submit.prevent="submitProfile">
           <label>
             <span>用户名</span>
             <input v-model="profileForm.username" />
@@ -852,12 +902,20 @@ onMounted(async () => {
             <input v-model="profileForm.email" type="email" placeholder="name@example.com" />
           </label>
           <label>
+            <span>当前密码</span>
+            <input v-model="profileForm.currentPassword" type="password" placeholder="修改密码时填写" />
+          </label>
+          <label>
             <span>新密码</span>
             <input v-model="profileForm.password" type="password" placeholder="留空则不修改" />
           </label>
-          <button type="button" disabled>保存资料</button>
+          <button type="submit" :disabled="profileLoading">
+            {{ profileLoading ? '保存中...' : '保存资料' }}
+          </button>
           <button type="button" class="secondary-button" @click="logout">退出登录</button>
         </form>
+        <p v-if="profileError" class="error-text">{{ profileError }}</p>
+        <p v-if="profileSuccess" class="success-text">{{ profileSuccess }}</p>
       </section>
     </div>
   </main>

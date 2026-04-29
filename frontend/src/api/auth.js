@@ -41,6 +41,42 @@ export async function fetchMe() {
   return data
 }
 
+export async function updateProfile(payload) {
+  const response = await fetch(`${API_BASE_URL}/auth/me`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify(payload),
+  })
+  const data = await response.json().catch(() => ({}))
+
+  if (!response.ok) {
+    const message = data?.detail?.message || data?.detail || data?.message || `用户资料保存失败：HTTP ${response.status}`
+    throw new Error(message)
+  }
+
+  return data
+}
+
+export async function changePassword(payload) {
+  const response = await fetch(`${API_BASE_URL}/auth/me/password`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify(payload),
+  })
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}))
+    const message = data?.detail?.message || data?.detail || data?.message || `密码修改失败：HTTP ${response.status}`
+    throw new Error(message)
+  }
+}
+
 async function submitAuth(path, payload) {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method: 'POST',

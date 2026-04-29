@@ -267,12 +267,12 @@ button:disabled {
 
 .account-entry {
   display: grid;
-  grid-template-columns: 38px minmax(0, 1fr);
-  gap: 10px;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 8px;
   align-items: center;
-  min-height: 52px;
+  min-height: 40px;
   border-radius: 9px;
-  padding: 7px;
+  padding: 5px 6px;
   text-align: left;
 }
 
@@ -288,8 +288,9 @@ button:disabled {
 }
 
 .account-avatar {
-  width: 36px;
-  height: 36px;
+  width: 28px;
+  height: 28px;
+  font-size: 12px;
 }
 
 .account-avatar img {
@@ -300,8 +301,7 @@ button:disabled {
 }
 
 .account-copy {
-  display: grid;
-  gap: 2px;
+  display: block;
   min-width: 0;
 }
 
@@ -313,6 +313,7 @@ button:disabled {
 }
 
 .account-copy small {
+  display: none;
   color: #6b6b6b;
   font-size: 12px;
 }
@@ -975,6 +976,13 @@ button:disabled {
 .error-text {
   margin: 8px 0 0;
   color: #a13f34;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.success-text {
+  margin: 8px 0 0;
+  color: #214b35;
   font-size: 13px;
   font-weight: 700;
 }
