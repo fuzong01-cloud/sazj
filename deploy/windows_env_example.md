@@ -33,6 +33,7 @@ LOG_MAX_BYTES=5242880
 LOG_BACKUP_COUNT=3
 
 PROVIDER_SECRET_KEY=请替换为32字符以上随机密钥
+ADMIN_WEBUI_TOKEN=请替换为32字符以上随机管理员令牌
 JWT_SECRET_KEY=请替换为32字符以上随机密钥
 ACCESS_TOKEN_EXPIRE_MINUTES=1440
 FRONTEND_ORIGINS=http://服务器公网IP
@@ -45,6 +46,16 @@ FRONTEND_ORIGINS=http://服务器公网IP
 - 至少 32 个字符。
 - 生产或演示环境必须替换默认值。
 - 部署后不要随意修改；修改后，数据库中已有 provider API Key 将无法解密，需要重新配置。
+
+## Provider 管理后台令牌
+
+`ADMIN_WEBUI_TOKEN` 用于访问后端模型配置 WebUI：
+
+```text
+http://服务器公网IP/admin/providers
+```
+
+该令牌只给项目维护者使用，不要发给普通用户。
 
 ## 登录令牌密钥
 

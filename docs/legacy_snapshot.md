@@ -8,8 +8,8 @@
 
 新系统采用纯 API 驱动的大模型方案：
 
-- 图像识别由用户配置的 Vision LLM API 完成。
-- 文本建议、网页 AI 助手、病害问答由用户配置的 Text LLM API 完成。
+- 图像识别由平台后端统一配置的 Vision LLM API 完成。
+- 文本建议、网页 AI 助手、病害问答由平台后端统一配置的 Text LLM API 完成。
 - 平台本身不内置 API Key、Token，也不固定绑定 Kimi、豆包、通义、OpenAI 或其他厂商。
 - 后端提供 `VisionProvider` 和 `TextProvider` 两套抽象层。
 - 模型配置包括 `provider_name`、`provider_type`、`base_url`、`api_key`、`model_name`、`enabled`。
@@ -22,8 +22,8 @@
 - Provider API Key 新写入和更新时会加密保存，API 响应不返回明文。
 - 当前已提供基础用户注册、登录、`/me` 接口，但业务数据尚未按用户隔离。
 - 当前历史记录已优先使用当前用户上下文；未登录时保留全局历史视图。
-- 当前模型配置已优先使用当前用户上下文；未登录时使用全局演示配置。
-- 前端已提供登录后的模型配置管理面板，可维护当前用户的 VisionProvider 和 TextProvider。
+- 当前模型配置改为后端管理员维护的全局配置，普通用户前端不暴露 API Key 配置入口。
+- 后端已提供 `/admin/providers` WebUI，用 `ADMIN_WEBUI_TOKEN` 进入。
 
 ## v0.4.0 数据库接入状态
 
@@ -76,6 +76,7 @@
 - `GET /api/model-configs/{id}`
 - `PUT /api/model-configs/{id}`
 - `DELETE /api/model-configs/{id}`
+- `GET /admin/providers`
 - `POST /api/predict`
 - `GET /api/history`
 - `GET /api/history/{id}`
@@ -92,9 +93,9 @@
 - 尚未接入 Alembic，开发期暂用 `create_all`。
 - 尚未实现区域统计和系统日志表。
 - 当前已提供历史记录查询、分页和删除 API，登录后按用户过滤，未登录时返回全局记录。
-- 用户接口已建立，模型配置和历史记录已接入用户上下文；区域统计还未接入用户归属。
+- 用户接口已建立，历史记录已接入用户上下文；区域统计还未接入用户归属。
 - 前端主页面已展示最近识别历史，点击记录可查看摘要、建议、置信度和原始模型输出。
-- 前端主页面已提供模型配置管理面板，但尚未提供独立路由和 provider 测试连接按钮。
+- 模型配置已从用户前端移出，改由后端管理员 WebUI 维护。
 - Provider 当前按 OpenAI-compatible `chat/completions` 协议实现，后续可扩展不同厂商适配器。
 
 ## 验证命令

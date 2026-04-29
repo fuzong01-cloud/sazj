@@ -1,24 +1,19 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 
-from app.api.auth import get_optional_current_user
 from app.providers.text_provider import (
     TextProviderError,
     TextProviderNotConfiguredError,
     get_enabled_text_provider,
 )
 from app.schemas.text_tasks import AdviceRequest, AdviceResponse
-from app.schemas.auth import UserPublic
 
 router = APIRouter(prefix="/advice", tags=["advice"])
 
 
 @router.post("/generate", response_model=AdviceResponse)
-async def generate_advice(
-    payload: AdviceRequest,
-    current_user: UserPublic | None = Depends(get_optional_current_user),
-) -> AdviceResponse:
+async def generate_advice(payload: AdviceRequest) -> AdviceResponse:
     try:
-        provider = get_enabled_text_provider(user_id=current_user.id if current_user else None)
+        provider = get_enabled_text_provider()
         user_prompt = (
             f"病害：{payload.disease_name}\n"
             f"风险等级：{payload.risk_level or '待确认'}\n"

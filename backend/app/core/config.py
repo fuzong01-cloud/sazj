@@ -45,6 +45,7 @@ class Settings:
         "PROVIDER_SECRET_KEY",
         "development-provider-secret-key-change-me",
     )
+    admin_webui_token: str = os.getenv("ADMIN_WEBUI_TOKEN", "development-admin-token-change-me")
     jwt_secret_key: str = os.getenv("JWT_SECRET_KEY", "development-jwt-secret-key-change-me")
     access_token_expire_minutes: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1440"))
     max_upload_bytes: int = int(os.getenv("MAX_UPLOAD_BYTES", str(8 * 1024 * 1024)))

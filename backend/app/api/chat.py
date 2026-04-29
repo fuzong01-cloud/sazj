@@ -1,24 +1,19 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 
-from app.api.auth import get_optional_current_user
 from app.providers.text_provider import (
     TextProviderError,
     TextProviderNotConfiguredError,
     get_enabled_text_provider,
 )
 from app.schemas.text_tasks import ChatRequest, ChatResponse
-from app.schemas.auth import UserPublic
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
 
 @router.post("", response_model=ChatResponse)
-async def chat(
-    payload: ChatRequest,
-    current_user: UserPublic | None = Depends(get_optional_current_user),
-) -> ChatResponse:
+async def chat(payload: ChatRequest) -> ChatResponse:
     try:
-        provider = get_enabled_text_provider(user_id=current_user.id if current_user else None)
+        provider = get_enabled_text_provider()
         user_prompt = (
             f"上下文：{payload.context or '无'}\n"
             f"用户问题：{payload.question}\n"

@@ -69,12 +69,15 @@ FRONTEND_ORIGINS=http://服务器公网IP
 UPLOAD_DIR=C:\sazj\uploads
 LOG_DIR=C:\sazj\logs
 PROVIDER_SECRET_KEY=请替换为32字符以上随机密钥
+ADMIN_WEBUI_TOKEN=请替换为32字符以上随机管理员令牌
 JWT_SECRET_KEY=请替换为32字符以上随机密钥
 ACCESS_TOKEN_EXPIRE_MINUTES=1440
 MAX_UPLOAD_BYTES=8388608
 ```
 
 `PROVIDER_SECRET_KEY` 用于加密模型提供商 API Key。部署后不要随意修改，否则旧配置将无法解密。
+
+`ADMIN_WEBUI_TOKEN` 用于保护 `/admin/providers` 模型配置后台，只给项目维护者使用。
 
 `JWT_SECRET_KEY` 用于签发登录访问令牌。修改后旧 token 会失效，用户需要重新登录。
 
@@ -142,7 +145,11 @@ C:\sazj\frontend\dist
     try_files {path} /index.html
     file_server
 
-    handle_path /api/* {
+    handle /api/* {
+        reverse_proxy 127.0.0.1:8000
+    }
+
+    handle /admin/* {
         reverse_proxy 127.0.0.1:8000
     }
 }
@@ -153,6 +160,7 @@ C:\sazj\frontend\dist
 ```text
 http://服务器公网IP/
 http://服务器公网IP/api/health
+http://服务器公网IP/admin/providers
 ```
 
 如果暂时不配置反向代理，也可以直接开放 `8000` 端口访问后端接口，但正式演示建议统一走 `80` 端口。
@@ -178,7 +186,7 @@ http://服务器公网IP/api/health
 - 服务器本机 `http://127.0.0.1:8000/api/health` 正常。
 - 外部浏览器 `http://服务器公网IP/` 可以打开前端页面。
 - 外部访问 `http://服务器公网IP/api/health` 返回后端健康状态。
-- 可以创建 VisionProvider 和 TextProvider 配置。
+- 维护者可以通过 `/admin/providers` 创建 VisionProvider 和 TextProvider 配置。
 - 上传图片后可以调用外部 Vision LLM API。
 - 可以调用 Text LLM API 生成防治建议。
 - 重启服务器后，NSSM 管理的后端服务自动恢复。

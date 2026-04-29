@@ -55,8 +55,8 @@ class TextProvider:
         return str(content).strip()
 
 
-def get_enabled_text_provider(user_id: int | None = None) -> TextProvider:
-    config = get_enabled_provider(ProviderType.text, user_id=user_id)
+def get_enabled_text_provider() -> TextProvider:
+    config = get_enabled_provider(ProviderType.text, user_id=None)
     if config is None:
-        raise TextProviderNotConfiguredError("未配置启用的文本模型提供商，请先创建 provider_type=text 的模型配置")
+        raise TextProviderNotConfiguredError("平台尚未配置启用的文本模型提供商，请联系管理员在 /admin/providers 配置")
     return TextProvider(config)

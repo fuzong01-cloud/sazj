@@ -3,6 +3,7 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.advice import router as advice_router
+from app.api.admin_providers import router as admin_providers_router
 from app.api.auth import router as auth_router
 from app.api.chat import router as chat_router
 from app.api.health import router as health_router
@@ -39,6 +40,7 @@ def create_app() -> FastAPI:
     app.include_router(history_router, prefix=settings.api_prefix)
     app.include_router(advice_router, prefix=settings.api_prefix)
     app.include_router(chat_router, prefix=settings.api_prefix)
+    app.include_router(admin_providers_router)
 
     @app.exception_handler(CryptoError)
     def crypto_error_handler(_request, exc: CryptoError) -> JSONResponse:

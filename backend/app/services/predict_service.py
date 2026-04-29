@@ -23,7 +23,7 @@ class PredictionService:
         if not image_bytes:
             raise InvalidImageError("请上传一张图片")
 
-        provider = get_enabled_vision_provider(user_id=user_id)
+        provider = get_enabled_vision_provider()
         result = await provider.predict(
             image_bytes=image_bytes,
             filename=filename,

@@ -1,10 +1,33 @@
 # 版本历史
 
+## v0.5.4 backend provider admin baseline
+
+日期：2026-04-29
+
+该版本撤回“普通用户在前端自配 API”的方案，改为由项目维护者在后端 WebUI 中配置平台统一承担的 Vision/Text LLM API。
+
+本基线已完成：
+
+- 移除前端模型配置管理面板。
+- 删除前端 `frontend/src/api/modelConfigs.js`。
+- 新增后端 `/admin/providers` WebUI。
+- 新增 `ADMIN_WEBUI_TOKEN` 管理员令牌配置。
+- `/api/model-configs` 改为管理员令牌保护，需要 `X-Admin-Token`。
+- `/api/predict`、`/api/advice/generate`、`/api/chat` 改为使用全局启用 provider，不再读取用户级 provider。
+- Provider API Key 仍由后端加密入库，不在前端用户界面暴露。
+
+已知限制：
+
+- 管理后台当前是轻量 HTML 表单，没有细粒度管理员账号体系。
+- 尚未提供 provider 测试连接按钮。
+
 ## v0.5.3 frontend provider management baseline
 
 日期：2026-04-29
 
 该版本新增前端模型配置管理页面，让登录用户在界面中维护自己的 VisionProvider 和 TextProvider。
+
+该方案已被 v0.5.4 撤回：普通用户不再维护 API，模型 API 改由后端管理员统一配置。
 
 本基线已完成：
 

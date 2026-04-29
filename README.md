@@ -6,19 +6,18 @@
 
 ## 当前状态
 
-- 版本基线：`v0.5.3 frontend provider management baseline`。
+- 版本基线：`v0.5.4 backend provider admin baseline`。
 - 当前后端入口：`backend/app/main.py`。
 - 当前前端入口：`frontend/src/main.js`。
-- 当前识别接口：`POST /api/predict`，通过用户配置的 Vision LLM API 完成。
-- 当前建议接口：`POST /api/advice/generate`，通过用户配置的 Text LLM API 完成。
-- 当前问答接口：`POST /api/chat`，通过用户配置的 Text LLM API 完成。
-- 模型配置接口：`/api/model-configs`，已切换为 SQLAlchemy 数据库仓储。
-- 模型配置归属：登录后创建和调用的是当前用户自己的 Vision/Text Provider；未登录时使用全局演示 provider。
+- 当前识别接口：`POST /api/predict`，通过平台后端统一配置的 Vision LLM API 完成。
+- 当前建议接口：`POST /api/advice/generate`，通过平台后端统一配置的 Text LLM API 完成。
+- 当前问答接口：`POST /api/chat`，通过平台后端统一配置的 Text LLM API 完成。
+- 模型配置后台：`/admin/providers`，由项目维护者配置全局 Vision/Text Provider。
+- 模型配置 API：`/api/model-configs` 仅供管理员自动化使用，需要 `X-Admin-Token`。
 - 识别记录：`POST /api/predict` 成功后会写入 `prediction_records` 表，并返回 `record_id`。
 - 历史记录接口：`GET /api/history`、`GET /api/history/{id}`、`DELETE /api/history/{id}`，当前操作全局识别记录。
 - 用户基础接口：`POST /api/auth/register`、`POST /api/auth/login`、`GET /api/auth/me`。
 - 用户上下文：前端支持登录/注册和本地 token 管理；登录后识别记录会绑定当前用户，历史记录优先返回当前用户数据。
-- 前端模型配置：登录后可在页面中新增、编辑、启用/停用和删除自己的 VisionProvider / TextProvider。
 - 前端历史记录：主页面已展示最近识别记录，点击记录可查看摘要、建议、置信度和原始模型输出。
 - 旧本地模型：`final_model.h5` 仅作为 legacy 资料，不参与运行。
 - 默认部署目标：Windows Server 轻量云服务器，2 核 CPU、2GB 内存、40GB 存储。
@@ -79,6 +78,7 @@ SQLITE_JOURNAL_MODE=OFF
 UPLOAD_DIR=../uploads
 LOG_DIR=../logs
 PROVIDER_SECRET_KEY=development-provider-secret-key-change-me
+ADMIN_WEBUI_TOKEN=development-admin-token-change-me
 JWT_SECRET_KEY=development-jwt-secret-key-change-me
 ACCESS_TOKEN_EXPIRE_MINUTES=1440
 ```
@@ -90,6 +90,8 @@ ACCESS_TOKEN_EXPIRE_MINUTES=1440
 部署到 Windows Server 时仍可切换 PostgreSQL。2 核 2GB Windows Server 建议采用轻量连接池：常驻连接 2 个，临时溢出连接 1 个。后端启动时会自动创建 `UPLOAD_DIR` 和 `LOG_DIR`，并在 `LOG_DIR/backend.log` 写入滚动日志。
 
 `PROVIDER_SECRET_KEY` 用于加密模型提供商 API Key。生产环境必须替换为 32 字符以上随机密钥，并在部署后保持稳定。
+
+`ADMIN_WEBUI_TOKEN` 用于保护后端模型配置 WebUI。生产环境必须替换为随机令牌，不要发给普通用户。
 
 ## Windows Server 部署
 
@@ -112,7 +114,7 @@ C:\sazj\
 - [Windows Server .env 示例](deploy/windows_env_example.md)
 - [Windows Server 防火墙与公网访问说明](deploy/windows_firewall_notes.md)
 
-服务器只负责运行前端静态页面、FastAPI 后端、PostgreSQL、上传文件存储、日志记录和外部模型 API 转发。不要在服务器上训练 CNN、运行本地大模型或执行重型推理。
+服务器只负责运行前端静态页面、FastAPI 后端、SQLite 演示库、上传文件存储、日志记录和外部模型 API 转发。不要在服务器上训练 CNN、运行本地大模型或执行重型推理。
 
 ## 本地启动
 
@@ -141,45 +143,17 @@ http://127.0.0.1:8000/docs
 http://127.0.0.1:5173
 ```
 
-## 模型配置
+## 后端模型配置 WebUI
 
-创建视觉模型配置：
+平台维护者访问：
 
-```http
-POST /api/model-configs
-Content-Type: application/json
-
-{
-  "provider_name": "my-vision-provider",
-  "provider_type": "vision",
-  "base_url": "https://example.com/v1",
-  "api_key": "YOUR_API_KEY",
-  "model_name": "vision-model-name",
-  "enabled": true
-}
+```text
+http://127.0.0.1:8000/admin/providers
 ```
 
-创建文本模型配置：
+输入 `ADMIN_WEBUI_TOKEN` 后，可配置平台统一使用的 VisionProvider 和 TextProvider。
 
-```http
-POST /api/model-configs
-Content-Type: application/json
-
-{
-  "provider_name": "my-text-provider",
-  "provider_type": "text",
-  "base_url": "https://example.com/v1",
-  "api_key": "YOUR_API_KEY",
-  "model_name": "text-model-name",
-  "enabled": true
-}
-```
-
-注意：Provider API Key 会加密后存入数据库。API 响应只返回 `api_key_masked`，不会返回明文。
-
-登录后调用 `/api/model-configs` 会自动绑定当前用户。不同用户不会共用同一组 provider；未登录请求仍使用 `user_id=null` 的全局演示配置。
-
-前端主页面已提供模型配置管理面板。登录后可维护当前用户自己的 VisionProvider 和 TextProvider；编辑配置时 API Key 留空会保留原密钥。
+注意：Provider API Key 会加密后存入数据库，页面不会回显明文。普通用户前端不提供 API Key、Base URL 或模型名称配置入口。
 
 ## 识别记录
 
@@ -207,18 +181,14 @@ Content-Type: application/json
 
 - `/api/predict` 会把新识别记录绑定到当前用户。
 - `/api/history`、`/api/history/{id}`、`DELETE /api/history/{id}` 会优先使用当前用户上下文。
-- `/api/model-configs` 会优先使用当前用户上下文。
 - 未登录时仍保留全局历史视图，便于演示和兼容旧数据。
 
 ## 开发计划
 
-1. 完成模型配置 PostgreSQL 持久化。
-2. 建立 Windows Server 2 核 2GB 演示部署方案。
-3. 落地 Windows 部署运行参数、轻量日志和数据库连接池配置。
-4. 本地开发默认切回 SQLite，并提供 Python 构建/启动入口。
-5. 增加前端模型配置管理页面。
-6. 补充图片文件保存。
-7. 增加前端登录态路由保护和用户资料页。
-7. 持久化区域统计和日志。
-8. 增加知识库增强、防治建议管理、风险预警和统计看板。
-9. 清理或迁移 legacy 模型、Notebook、Colab、Kaggle 残留资料。
+1. 增加后端 provider 测试连接能力。
+2. 补充图片文件保存。
+3. 增加前端登录态路由保护和用户资料页。
+4. 持久化区域统计和日志。
+5. 增加知识库增强、防治建议管理、风险预警和统计看板。
+6. 按演示稳定性决定是否从 SQLite 切换 PostgreSQL。
+7. 清理或迁移 legacy 模型、Notebook、Colab、Kaggle 残留资料。

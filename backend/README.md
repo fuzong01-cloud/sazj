@@ -1,6 +1,6 @@
 # 后端服务
 
-本目录是薯安智检的 FastAPI 后端。当前后端提供健康检查、用户注册登录、用户级模型配置、外部 Vision/Text Provider 调用、识别记录持久化和历史记录查询。
+本目录是薯安智检的 FastAPI 后端。当前后端提供健康检查、用户注册登录、全局模型配置后台、外部 Vision/Text Provider 调用、识别记录持久化和历史记录查询。
 
 ## 本地启动
 
@@ -18,6 +18,7 @@ AUTO_CREATE_TABLES=true
 SQLITE_JOURNAL_MODE=OFF
 UPLOAD_DIR=uploads
 LOG_DIR=logs
+ADMIN_WEBUI_TOKEN=development-admin-token-change-me
 ```
 
 访问：
@@ -85,11 +86,14 @@ DB_POOL_RECYCLE=1800
 - `DELETE /api/history/{id}`
 - `POST /api/advice/generate`
 - `POST /api/chat`
+- `GET /admin/providers`
 
 ## 注意事项
 
-- 当前识别通过用户配置的 Vision LLM API 完成，不加载本地 TensorFlow 模型。
-- 当前防治建议和聊天通过用户配置的 Text LLM API 完成。
+- 当前识别通过后端管理员配置的全局 Vision LLM API 完成，不加载本地 TensorFlow 模型。
+- 当前防治建议和聊天通过后端管理员配置的全局 Text LLM API 完成。
 - Provider API Key 会加密后入库。
-- 登录后模型配置和历史记录优先按当前用户隔离。
+- `/api/model-configs` 需要 `X-Admin-Token`，普通用户不应直接操作模型配置。
+- 后端 WebUI 地址为 `/admin/providers`，使用 `ADMIN_WEBUI_TOKEN` 进入。
+- 登录后历史记录按当前用户隔离。
 - SQLite 适合本地开发和临时演示；正式 Windows Server 部署仍建议使用 PostgreSQL。
