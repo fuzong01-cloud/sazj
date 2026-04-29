@@ -1,5 +1,5 @@
-import { API_BASE_URL } from './health'
 import { getAuthHeaders } from './auth'
+import { API_BASE_URL } from './health'
 
 export async function predictImage(file, environment = null) {
   const body = new FormData()

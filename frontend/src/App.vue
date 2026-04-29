@@ -10,47 +10,64 @@ import { fetchWeather } from './api/weather'
 const health = ref(null)
 const healthLoading = ref(false)
 const healthError = ref('')
-const selectedFile = ref(null)
-const previewUrl = ref('')
-const predictLoading = ref(false)
-const predictError = ref('')
-const predictResult = ref(null)
+
 const currentUser = ref(null)
 const authMode = ref('login')
 const authUsername = ref('')
 const authPassword = ref('')
 const authLoading = ref(false)
 const authError = ref('')
+
 const historyLoading = ref(false)
 const historyError = ref('')
 const historyRecords = ref([])
-const historyLimit = ref(10)
+const historyLimit = ref(12)
 const historyOffset = ref(0)
 const historyTotal = ref(0)
 const selectedHistory = ref(null)
 const historyDetailLoading = ref(false)
 const historyDetailError = ref('')
 const historyDeleteLoading = ref(false)
-const chatQuestion = ref('')
+
+const composerText = ref('')
 const chatLoading = ref(false)
 const chatError = ref('')
-const chatMessages = ref([])
+const messages = ref([])
+
+const predictLoading = ref(false)
+const predictError = ref('')
+const predictResult = ref(null)
+const selectedImage = ref(null)
+const selectedImagePreview = ref('')
+const attachedFiles = ref([])
+
 const locationLoading = ref(false)
 const locationError = ref('')
 const weatherContext = ref(null)
+
+const plusMenuOpen = ref(false)
+const imageInputRef = ref(null)
+const fileInputRef = ref(null)
 
 const historyPage = computed(() => Math.floor(historyOffset.value / historyLimit.value) + 1)
 const historyPageCount = computed(() => Math.max(1, Math.ceil(historyTotal.value / historyLimit.value)))
 const canPrevHistory = computed(() => historyOffset.value > 0)
 const canNextHistory = computed(() => historyOffset.value + historyLimit.value < historyTotal.value)
-const authTitle = computed(() => (authMode.value === 'login' ? '用户登录' : '用户注册'))
+const authTitle = computed(() => (authMode.value === 'login' ? '登录' : '注册'))
 const environmentReady = computed(() => Boolean(weatherContext.value))
+const isBusy = computed(() => chatLoading.value || predictLoading.value)
 
 const serviceState = computed(() => {
   if (healthLoading.value) return '检测中'
-  if (health.value?.ok) return '后端已连接'
-  if (healthError.value) return '后端未连接'
-  return '等待检测'
+  if (health.value?.ok) return '在线'
+  if (healthError.value) return '离线'
+  return '未知'
+})
+
+const composerPlaceholder = computed(() => {
+  if (selectedImage.value) return '说明你想让 AI 重点判断什么，也可以直接发送图片识别'
+  if (attachedFiles.value.length) return '输入问题，文件名会作为上下文提示发送给 AI'
+  return '询问病害、上传图片识别，或通过 + 获取天气位置'
 })
 
 async function checkBackend() {
@@ -63,69 +80,6 @@ async function checkBackend() {
     healthError.value = err instanceof Error ? err.message : '后端连接失败'
   } finally {
     healthLoading.value = false
-  }
-}
-
-function onFileChange(event) {
-  const [file] = event.target.files || []
-  selectedFile.value = file || null
-  predictResult.value = null
-  predictError.value = ''
-
-  if (previewUrl.value) {
-    URL.revokeObjectURL(previewUrl.value)
-    previewUrl.value = ''
-  }
-
-  if (file) {
-    previewUrl.value = URL.createObjectURL(file)
-  }
-}
-
-async function submitPredict() {
-  if (!selectedFile.value) {
-    predictError.value = '请先选择一张叶片图片'
-    return
-  }
-
-  predictLoading.value = true
-  predictError.value = ''
-
-  try {
-    predictResult.value = await predictImage(selectedFile.value, weatherContext.value)
-    if (predictResult.value.weather) weatherContext.value = predictResult.value.weather
-    await loadHistory()
-  } catch (err) {
-    predictResult.value = null
-    predictError.value = err instanceof Error ? err.message : '识别失败'
-  } finally {
-    predictLoading.value = false
-  }
-}
-
-async function loadWeatherFromBrowser() {
-  if (!navigator.geolocation) {
-    locationError.value = '当前浏览器不支持定位。'
-    return
-  }
-
-  locationLoading.value = true
-  locationError.value = ''
-
-  try {
-    const position = await new Promise((resolve, reject) => {
-      navigator.geolocation.getCurrentPosition(resolve, reject, {
-        enableHighAccuracy: false,
-        timeout: 10000,
-        maximumAge: 10 * 60 * 1000,
-      })
-    })
-    const { latitude, longitude } = position.coords
-    weatherContext.value = await fetchWeather(latitude, longitude, '浏览器定位')
-  } catch (err) {
-    locationError.value = err instanceof Error ? err.message : '定位或天气获取失败'
-  } finally {
-    locationLoading.value = false
   }
 }
 
@@ -186,10 +140,6 @@ async function loadHistory() {
     const page = await fetchHistory(historyLimit.value, historyOffset.value)
     historyRecords.value = page.items || []
     historyTotal.value = page.total || 0
-    if (selectedHistory.value) {
-      const current = historyRecords.value.find((record) => record.id === selectedHistory.value.id)
-      if (current) selectedHistory.value = { ...selectedHistory.value, ...current }
-    }
   } catch (err) {
     historyRecords.value = []
     historyError.value = err instanceof Error ? err.message : '历史记录获取失败'
@@ -239,36 +189,133 @@ async function removeSelectedHistory() {
   }
 }
 
-function buildChatContext() {
-  if (!predictResult.value) return ''
-  return [
-    `最近识别病害：${predictResult.value.disease_name}`,
-    `风险等级：${predictResult.value.risk_level}`,
-    `摘要：${predictResult.value.summary}`,
-    predictResult.value.suggestions?.length ? `建议：${predictResult.value.suggestions.join('；')}` : '',
-    weatherContext.value
-      ? `环境：${weatherContext.value.climate_zone}，${weatherContext.value.weather_text || '天气未知'}，气温 ${weatherContext.value.temperature_c ?? '未知'}°C，湿度 ${weatherContext.value.relative_humidity_percent ?? '未知'}%。`
-      : '',
-  ]
-    .filter(Boolean)
-    .join('\n')
+function triggerImageUpload() {
+  plusMenuOpen.value = false
+  imageInputRef.value?.click()
 }
 
-async function submitChat() {
-  const question = chatQuestion.value.trim()
-  if (!question || chatLoading.value) return
+function triggerFileUpload() {
+  plusMenuOpen.value = false
+  fileInputRef.value?.click()
+}
 
-  chatMessages.value.push({ role: 'user', text: question })
-  chatQuestion.value = ''
-  chatLoading.value = true
+function onImageChange(event) {
+  const [file] = event.target.files || []
+  if (!file) return
+
+  selectedImage.value = file
+  selectedImagePreview.value = URL.createObjectURL(file)
+  predictError.value = ''
+  selectedHistory.value = null
+  event.target.value = ''
+}
+
+function onFileChange(event) {
+  const files = Array.from(event.target.files || [])
+  attachedFiles.value = files.map((file) => ({
+    name: file.name,
+    size: file.size,
+    type: file.type || 'application/octet-stream',
+  }))
+  plusMenuOpen.value = false
+  event.target.value = ''
+}
+
+function clearImage() {
+  if (selectedImagePreview.value) URL.revokeObjectURL(selectedImagePreview.value)
+  selectedImage.value = null
+  selectedImagePreview.value = ''
+}
+
+function clearFiles() {
+  attachedFiles.value = []
+}
+
+async function loadWeatherFromBrowser() {
+  plusMenuOpen.value = false
+  if (!navigator.geolocation) {
+    locationError.value = '当前浏览器不支持定位。'
+    return
+  }
+
+  locationLoading.value = true
+  locationError.value = ''
+
+  try {
+    const position = await new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(resolve, reject, {
+        enableHighAccuracy: false,
+        timeout: 10000,
+        maximumAge: 10 * 60 * 1000,
+      })
+    })
+    const { latitude, longitude } = position.coords
+    weatherContext.value = await fetchWeather(latitude, longitude, '浏览器定位')
+  } catch (err) {
+    locationError.value = err instanceof Error ? err.message : '定位或天气获取失败'
+  } finally {
+    locationLoading.value = false
+  }
+}
+
+function buildChatContext(files = attachedFiles.value) {
+  const context = []
+  if (predictResult.value) {
+    context.push(`最近识别病害：${predictResult.value.disease_name}`)
+    context.push(`风险等级：${predictResult.value.risk_level}`)
+    context.push(`摘要：${predictResult.value.summary}`)
+    if (predictResult.value.suggestions?.length) {
+      context.push(`建议：${predictResult.value.suggestions.join('；')}`)
+    }
+  }
+  if (weatherContext.value) {
+    context.push(
+      `环境：${weatherContext.value.climate_zone}，${weatherContext.value.weather_text || '天气未知'}，气温 ${
+        weatherContext.value.temperature_c ?? '未知'
+      }°C，湿度 ${weatherContext.value.relative_humidity_percent ?? '未知'}%。`,
+    )
+  }
+  if (files.length) {
+    context.push(`用户已在前端选择文件：${files.map((file) => file.name).join('、')}。当前版本尚未读取文件正文。`)
+  }
+  return context.join('\n')
+}
+
+async function submitComposer() {
+  const text = composerText.value.trim()
+  if (isBusy.value) return
+  if (!text && !selectedImage.value && !attachedFiles.value.length) return
+
   chatError.value = ''
+  predictError.value = ''
+  selectedHistory.value = null
+
+  if (selectedImage.value) {
+    await submitImageMessage(text)
+    return
+  }
+
+  await submitTextMessage(text || '请根据我上传的文件给出农业病害相关建议。')
+}
+
+async function submitTextMessage(text) {
+  const files = [...attachedFiles.value]
+  const context = buildChatContext(files)
+  messages.value.push({
+    role: 'user',
+    text,
+    files,
+  })
+  composerText.value = ''
+  clearFiles()
+  chatLoading.value = true
 
   try {
     const result = await askAssistant({
-      question,
-      context: buildChatContext(),
+      question: text,
+      context,
     })
-    chatMessages.value.push({
+    messages.value.push({
       role: 'assistant',
       text: result.answer,
       provider: `${result.provider_name} / ${result.model_name}`,
@@ -277,6 +324,41 @@ async function submitChat() {
     chatError.value = err instanceof Error ? err.message : 'AI 助手调用失败'
   } finally {
     chatLoading.value = false
+  }
+}
+
+async function submitImageMessage(text) {
+  const imageFile = selectedImage.value
+  const imagePreview = selectedImagePreview.value
+  const prompt = text || '请识别这张马铃薯叶片图片，并结合环境给出防治建议。'
+
+  messages.value.push({
+    role: 'user',
+    text: prompt,
+    imageUrl: imagePreview,
+    files: [...attachedFiles.value],
+  })
+  composerText.value = ''
+  clearFiles()
+  selectedImage.value = null
+  selectedImagePreview.value = ''
+  predictLoading.value = true
+
+  try {
+    const result = await predictImage(imageFile, weatherContext.value)
+    predictResult.value = result
+    if (result.weather) weatherContext.value = result.weather
+    messages.value.push({
+      role: 'assistant',
+      type: 'prediction',
+      result,
+      provider: `${result.provider_name} / ${result.model_name}`,
+    })
+    await loadHistory()
+  } catch (err) {
+    predictError.value = err instanceof Error ? err.message : '图片识别失败'
+  } finally {
+    predictLoading.value = false
   }
 }
 
@@ -297,6 +379,12 @@ function formatCoordinate(value) {
   return Number(value).toFixed(4)
 }
 
+function formatFileSize(size) {
+  if (!size) return '0 KB'
+  if (size < 1024 * 1024) return `${Math.ceil(size / 1024)} KB`
+  return `${(size / 1024 / 1024).toFixed(1)} MB`
+}
+
 onMounted(async () => {
   checkBackend()
   await restoreSession()
@@ -305,278 +393,121 @@ onMounted(async () => {
 </script>
 
 <template>
-  <main class="shell">
-    <section class="hero">
-      <div class="hero-copy">
-        <p class="eyebrow">API 驱动基线 v0.3.0</p>
-        <h1>薯安智检</h1>
-        <p class="summary">
-          新系统不再使用本地 CNN。图片识别由平台后端配置的 Vision LLM API 完成，防治建议和问答由 Text LLM API 完成。
-        </p>
-      </div>
-      <div class="status-panel">
-        <span class="status-dot" :class="{ online: health?.ok }"></span>
+  <main class="chat-shell">
+    <aside class="sidebar" aria-label="历史记录侧边栏">
+      <div class="brand-row">
+        <div class="brand-mark">薯</div>
         <div>
-          <p class="status-label">API 状态</p>
-          <strong>{{ serviceState }}</strong>
-          <button type="button" @click="checkBackend" :disabled="healthLoading">
-            {{ healthLoading ? '检测中...' : '重新检测' }}
-          </button>
+          <strong>薯安智检</strong>
+          <span>马铃薯病害 AI 平台</span>
         </div>
       </div>
-    </section>
 
-    <section class="environment-panel">
-      <div class="environment-copy">
-        <p class="panel-k">环境上下文</p>
-        <h2>定位与天气</h2>
-        <p>
-          获取浏览器定位后，后端会查询天气并判断气候带。图片识别时会把这些信息交给 Vision LLM，用于生成更贴近当地气候和病害风险的建议。
-        </p>
-      </div>
-      <div class="environment-actions">
-        <button type="button" @click="loadWeatherFromBrowser" :disabled="locationLoading">
-          {{ locationLoading ? '获取中...' : environmentReady ? '重新获取' : '获取定位和天气' }}
-        </button>
-        <p v-if="locationError" class="error-text">{{ locationError }}</p>
-      </div>
-      <dl v-if="weatherContext" class="weather-grid">
-        <div>
-          <dt>气候带</dt>
-          <dd>{{ weatherContext.climate_zone }}</dd>
-        </div>
-        <div>
-          <dt>天气</dt>
-          <dd>{{ weatherContext.weather_text || '未知' }}</dd>
-        </div>
-        <div>
-          <dt>气温</dt>
-          <dd>{{ weatherContext.temperature_c ?? '未知' }}°C</dd>
-        </div>
-        <div>
-          <dt>湿度</dt>
-          <dd>{{ weatherContext.relative_humidity_percent ?? '未知' }}%</dd>
-        </div>
-        <div>
-          <dt>降水</dt>
-          <dd>{{ weatherContext.precipitation_mm ?? '未知' }} mm</dd>
-        </div>
-        <div>
-          <dt>坐标</dt>
-          <dd>{{ formatCoordinate(weatherContext.latitude) }}, {{ formatCoordinate(weatherContext.longitude) }}</dd>
-        </div>
-      </dl>
-      <div v-else class="weather-empty">
-        <p>尚未获取环境上下文。未获取时仍可识别图片，但建议不会结合实时天气。</p>
-      </div>
-    </section>
-
-    <section class="workbench">
-      <article class="panel auth-panel">
-        <p class="panel-k">用户身份</p>
+      <section class="auth-box">
         <template v-if="currentUser">
-          <h2>{{ currentUser.username }}</h2>
-          <p>当前历史记录会优先显示该用户的识别记录。退出后将回到全局演示视图。</p>
-          <button type="button" class="ghost-button" @click="logout">退出登录</button>
+          <div class="user-card">
+            <span>当前用户</span>
+            <strong>{{ currentUser.username }}</strong>
+          </div>
+          <button type="button" class="secondary-button" @click="logout">退出登录</button>
         </template>
         <template v-else>
-          <div class="auth-tabs" aria-label="认证方式">
-            <button
-              type="button"
-              :class="{ active: authMode === 'login' }"
-              @click="switchAuthMode('login')"
-            >
-              登录
-            </button>
-            <button
-              type="button"
-              :class="{ active: authMode === 'register' }"
-              @click="switchAuthMode('register')"
-            >
-              注册
-            </button>
+          <div class="segmented">
+            <button type="button" :class="{ active: authMode === 'login' }" @click="switchAuthMode('login')">登录</button>
+            <button type="button" :class="{ active: authMode === 'register' }" @click="switchAuthMode('register')">注册</button>
           </div>
-          <h2>{{ authTitle }}</h2>
           <form class="auth-form" @submit.prevent="submitAuth">
-            <label>
-              <span>用户名</span>
-              <input v-model="authUsername" autocomplete="username" placeholder="tester" required />
-            </label>
-            <label>
-              <span>密码</span>
-              <input
-                v-model="authPassword"
-                type="password"
-                :autocomplete="authMode === 'login' ? 'current-password' : 'new-password'"
-                placeholder="至少 8 位"
-                required
-              />
-            </label>
-            <button type="submit" :disabled="authLoading">
-              {{ authLoading ? '处理中...' : authTitle }}
-            </button>
+            <input v-model="authUsername" autocomplete="username" placeholder="用户名" required />
+            <input
+              v-model="authPassword"
+              type="password"
+              :autocomplete="authMode === 'login' ? 'current-password' : 'new-password'"
+              placeholder="密码"
+              required
+            />
+            <button type="submit" :disabled="authLoading">{{ authLoading ? '处理中...' : authTitle }}</button>
           </form>
           <p v-if="authError" class="error-text">{{ authError }}</p>
         </template>
-      </article>
+      </section>
 
-      <article class="panel uploader">
-        <p class="panel-k">视觉模型识别</p>
-        <h2>上传叶片图片</h2>
-        <label class="drop-zone">
-          <input type="file" accept="image/*" @change="onFileChange" />
-          <span>{{ selectedFile?.name || '选择 JPG、PNG 或 WebP 图片' }}</span>
-        </label>
-        <img v-if="previewUrl" class="preview" :src="previewUrl" alt="待识别叶片" />
-        <button type="button" @click="submitPredict" :disabled="predictLoading || !selectedFile">
-          {{ predictLoading ? '识别中...' : '调用 Vision LLM 识别' }}
-        </button>
-        <p v-if="predictError" class="error-text">{{ predictError }}</p>
-      </article>
-
-      <article class="panel result-panel">
-        <p class="panel-k">识别结果</p>
-        <template v-if="predictResult">
-          <h2>{{ predictResult.disease_name }}</h2>
-          <div class="metric">
-            <span>风险等级</span>
-            <strong>{{ predictResult.risk_level }}</strong>
-          </div>
-          <p>{{ predictResult.summary }}</p>
-          <div v-if="predictResult.confidence_percent !== null" class="prob-row">
-            <span>模型置信度</span>
-            <strong>{{ predictResult.confidence_percent }}%</strong>
-          </div>
-          <div class="prob-list">
-            <div v-for="item in predictResult.suggestions" :key="item" class="prob-row">
-              <span>{{ item }}</span>
-            </div>
-          </div>
-          <p class="provider-note">
-            Provider：{{ predictResult.provider_name }} / {{ predictResult.model_name }}
-          </p>
-          <p v-if="predictResult.record_id" class="provider-note">
-            记录编号：#{{ predictResult.record_id }}
-          </p>
-        </template>
-        <template v-else>
-          <h2>等待识别</h2>
-          <p>
-            平台后端会使用管理员配置的 Vision LLM API。未配置时，预测接口会返回明确错误，不会调用任何内置模型。
-          </p>
-        </template>
-      </article>
-    </section>
-
-    <section class="assistant-panel">
-      <div class="assistant-head">
-        <div>
-          <p class="panel-k">AI 助手</p>
-          <h2>病害问答与防治建议</h2>
-        </div>
-        <span>由后端 TextProvider 提供</span>
-      </div>
-
-      <div class="assistant-body">
-        <div class="chat-log" aria-label="AI 助手对话记录">
-          <div v-if="!chatMessages.length" class="chat-empty">
-            <p>可以询问病害判断、防治建议、观察要点或后续管理措施。</p>
-          </div>
-          <article
-            v-for="(message, index) in chatMessages"
-            :key="`${message.role}-${index}`"
-            class="chat-message"
-            :class="message.role"
-          >
-            <p>{{ message.text }}</p>
-            <span v-if="message.provider">{{ message.provider }}</span>
-          </article>
+      <section class="history-section">
+        <div class="sidebar-heading">
+          <span>识别历史</span>
+          <button type="button" class="icon-button" title="刷新历史" @click="loadHistory" :disabled="historyLoading">↻</button>
         </div>
 
-        <form class="chat-form" @submit.prevent="submitChat">
-          <textarea
-            v-model="chatQuestion"
-            rows="3"
-            placeholder="例如：晚疫病和早疫病在田间如何区分？"
-            :disabled="chatLoading"
-          ></textarea>
-          <button type="submit" :disabled="chatLoading || !chatQuestion.trim()">
-            {{ chatLoading ? '生成中...' : '发送问题' }}
-          </button>
-        </form>
-        <p v-if="chatError" class="error-text">{{ chatError }}</p>
-      </div>
-    </section>
-
-    <section class="history-panel">
-      <div class="history-head">
-        <div>
-          <p class="panel-k">识别历史</p>
-          <h2>{{ currentUser ? '我的识别记录' : '最近识别记录' }}</h2>
-        </div>
-        <button type="button" class="ghost-button" @click="loadHistory" :disabled="historyLoading">
-          {{ historyLoading ? '刷新中...' : '刷新' }}
-        </button>
-      </div>
-
-      <p v-if="historyError" class="error-text">{{ historyError }}</p>
-
-      <div v-else-if="historyRecords.length" class="history-layout">
-        <div class="history-table" aria-label="识别历史记录">
-          <div class="history-row history-row-head">
-            <span>时间</span>
-            <span>病害</span>
-            <span>风险</span>
-            <span>Provider</span>
-            <span>模型</span>
-          </div>
+        <p v-if="historyError" class="error-text">{{ historyError }}</p>
+        <div v-else class="history-list">
           <button
             v-for="record in historyRecords"
             :key="record.id"
             type="button"
-            class="history-row history-row-action"
+            class="history-item"
             :class="{ active: selectedHistory?.id === record.id }"
             @click="selectHistory(record)"
           >
             <span>{{ formatTime(record.created_at) }}</span>
             <strong>{{ record.disease_name }}</strong>
-            <span class="risk-pill">{{ record.risk_level }}</span>
-            <span>{{ record.provider_name }}</span>
-            <span>{{ record.model_name }}</span>
+            <small>{{ record.risk_level }} · {{ record.provider_name }}</small>
           </button>
+          <p v-if="!historyRecords.length" class="empty-text">
+            {{ historyLoading ? '正在读取历史...' : '暂无历史记录' }}
+          </p>
         </div>
 
-        <aside class="history-detail" aria-label="历史记录详情">
-          <template v-if="selectedHistory">
-            <div class="detail-title-row">
-              <div>
-                <p class="panel-k">记录 #{{ selectedHistory.id }}</p>
-                <h3>{{ selectedHistory.disease_name }}</h3>
-              </div>
-              <span class="risk-pill">{{ selectedHistory.risk_level }}</span>
+        <div v-if="historyTotal" class="pager">
+          <button type="button" class="icon-button" title="上一页" @click="goHistoryPage(-1)" :disabled="!canPrevHistory || historyLoading">‹</button>
+          <span>{{ historyPage }} / {{ historyPageCount }}</span>
+          <button type="button" class="icon-button" title="下一页" @click="goHistoryPage(1)" :disabled="!canNextHistory || historyLoading">›</button>
+        </div>
+      </section>
+
+      <div class="service-box">
+        <span class="status-dot" :class="{ online: health?.ok }"></span>
+        <div>
+          <strong>后端 {{ serviceState }}</strong>
+          <button type="button" @click="checkBackend" :disabled="healthLoading">
+            {{ healthLoading ? '检测中...' : '重新检测' }}
+          </button>
+        </div>
+      </div>
+    </aside>
+
+    <section class="conversation" aria-label="AI 对话区">
+      <header class="conversation-header">
+        <div>
+          <p>API 驱动基线</p>
+          <h1>马铃薯病害智能助手</h1>
+        </div>
+        <div v-if="weatherContext" class="weather-chip" title="当前环境上下文">
+          <span>{{ weatherContext.climate_zone }}</span>
+          <strong>{{ weatherContext.weather_text || '天气未知' }}</strong>
+          <small>{{ weatherContext.temperature_c ?? '未知' }}°C / {{ weatherContext.relative_humidity_percent ?? '未知' }}%</small>
+        </div>
+      </header>
+
+      <div class="message-scroll">
+        <section v-if="selectedHistory" class="history-detail-card">
+          <div class="detail-head">
+            <div>
+              <span>历史记录 #{{ selectedHistory.id }}</span>
+              <h2>{{ selectedHistory.disease_name }}</h2>
             </div>
-            <button
-              type="button"
-              class="danger-button"
-              @click="removeSelectedHistory"
-              :disabled="historyDeleteLoading"
-            >
-              {{ historyDeleteLoading ? '删除中...' : '删除记录' }}
-            </button>
-
-            <p v-if="historyDetailError" class="error-text">{{ historyDetailError }}</p>
-            <p v-else-if="historyDetailLoading" class="muted-text">正在读取详情...</p>
-
+            <strong>{{ selectedHistory.risk_level }}</strong>
+          </div>
+          <p v-if="historyDetailError" class="error-text">{{ historyDetailError }}</p>
+          <p v-else-if="historyDetailLoading" class="empty-text">正在读取详情...</p>
+          <template v-else>
+            <p>{{ selectedHistory.summary }}</p>
             <dl class="detail-grid">
               <div>
-                <dt>识别时间</dt>
+                <dt>时间</dt>
                 <dd>{{ formatTime(selectedHistory.created_at) }}</dd>
               </div>
               <div>
-                <dt>模型置信度</dt>
-                <dd>
-                  {{ selectedHistory.confidence_percent !== null ? `${selectedHistory.confidence_percent}%` : '未返回' }}
-                </dd>
+                <dt>置信度</dt>
+                <dd>{{ selectedHistory.confidence_percent !== null ? `${selectedHistory.confidence_percent}%` : '未返回' }}</dd>
               </div>
               <div>
                 <dt>Provider</dt>
@@ -587,44 +518,107 @@ onMounted(async () => {
                 <dd>{{ selectedHistory.model_name }}</dd>
               </div>
             </dl>
-
-            <section class="detail-block">
-              <h4>摘要</h4>
-              <p>{{ selectedHistory.summary }}</p>
-            </section>
-
-            <section class="detail-block">
-              <h4>建议</h4>
-              <ul v-if="selectedHistory.suggestions?.length" class="suggestion-list">
-                <li v-for="item in selectedHistory.suggestions" :key="item">{{ item }}</li>
-              </ul>
-              <p v-else class="muted-text">模型未返回建议</p>
-            </section>
-
-            <section class="detail-block">
-              <h4>原始模型输出</h4>
+            <ul v-if="selectedHistory.suggestions?.length" class="suggestion-list">
+              <li v-for="item in selectedHistory.suggestions" :key="item">{{ item }}</li>
+            </ul>
+            <details class="raw-output">
+              <summary>查看原始模型输出</summary>
               <pre>{{ selectedHistory.raw_text || '无原始输出' }}</pre>
-            </section>
+            </details>
+            <button type="button" class="danger-button" @click="removeSelectedHistory" :disabled="historyDeleteLoading">
+              {{ historyDeleteLoading ? '删除中...' : '删除这条记录' }}
+            </button>
           </template>
-          <div v-else class="empty-detail">
-            <p>点击一条记录查看完整信息</p>
+        </section>
+
+        <section v-if="!messages.length && !selectedHistory" class="welcome-panel">
+          <div class="welcome-mark">+</div>
+          <h2>从一句问题或一张叶片图片开始</h2>
+          <p>
+            左侧保留识别历史。底部输入框左侧的 + 可上传图片、选择文件、获取位置和天气。
+            图片识别会调用后端配置的 Vision LLM；普通问答会调用 Text LLM。
+          </p>
+        </section>
+
+        <article v-for="(message, index) in messages" :key="index" class="message" :class="message.role">
+          <div class="avatar">{{ message.role === 'user' ? '你' : 'AI' }}</div>
+          <div class="message-content">
+            <p v-if="message.text">{{ message.text }}</p>
+            <img v-if="message.imageUrl" :src="message.imageUrl" alt="已上传图片预览" />
+            <div v-if="message.files?.length" class="file-list">
+              <span v-for="file in message.files" :key="file.name">{{ file.name }} · {{ formatFileSize(file.size) }}</span>
+            </div>
+            <template v-if="message.type === 'prediction'">
+              <div class="prediction-result">
+                <div class="detail-head">
+                  <div>
+                    <span>识别结果</span>
+                    <h2>{{ message.result.disease_name }}</h2>
+                  </div>
+                  <strong>{{ message.result.risk_level }}</strong>
+                </div>
+                <p>{{ message.result.summary }}</p>
+                <ul v-if="message.result.suggestions?.length" class="suggestion-list">
+                  <li v-for="item in message.result.suggestions" :key="item">{{ item }}</li>
+                </ul>
+                <small>{{ message.provider }}</small>
+              </div>
+            </template>
+            <small v-else-if="message.provider">{{ message.provider }}</small>
           </div>
-        </aside>
+        </article>
+
+        <p v-if="chatError" class="error-text inline-error">{{ chatError }}</p>
+        <p v-if="predictError" class="error-text inline-error">{{ predictError }}</p>
+        <p v-if="locationError" class="error-text inline-error">{{ locationError }}</p>
+        <p v-if="isBusy" class="empty-text inline-status">
+          {{ predictLoading ? '正在调用 Vision LLM 识别图片...' : '正在调用 Text LLM 生成回答...' }}
+        </p>
       </div>
 
-      <div v-if="!historyError && historyTotal" class="history-pager">
-        <button type="button" class="ghost-button" @click="goHistoryPage(-1)" :disabled="!canPrevHistory || historyLoading">
-          上一页
-        </button>
-        <span>第 {{ historyPage }} / {{ historyPageCount }} 页，共 {{ historyTotal }} 条</span>
-        <button type="button" class="ghost-button" @click="goHistoryPage(1)" :disabled="!canNextHistory || historyLoading">
-          下一页
-        </button>
-      </div>
+      <footer class="composer-wrap">
+        <div v-if="selectedImage || attachedFiles.length || weatherContext" class="context-strip">
+          <div v-if="selectedImage" class="attachment-pill">
+            <img :src="selectedImagePreview" alt="待识别图片" />
+            <span>{{ selectedImage.name }}</span>
+            <button type="button" title="移除图片" @click="clearImage">×</button>
+          </div>
+          <div v-for="file in attachedFiles" :key="file.name" class="attachment-pill">
+            <span>{{ file.name }}</span>
+            <small>{{ formatFileSize(file.size) }}</small>
+          </div>
+          <button v-if="attachedFiles.length" type="button" class="text-button" @click="clearFiles">清空文件</button>
+          <div v-if="weatherContext" class="attachment-pill">
+            <span>{{ weatherContext.climate_zone }} · {{ weatherContext.weather_text || '天气未知' }}</span>
+            <small>{{ formatCoordinate(weatherContext.latitude) }}, {{ formatCoordinate(weatherContext.longitude) }}</small>
+          </div>
+        </div>
 
-      <div v-else-if="!historyError" class="empty-history">
-        <p>{{ historyLoading ? '正在读取历史记录...' : '暂无识别记录' }}</p>
-      </div>
+        <form class="composer" @submit.prevent="submitComposer">
+          <div class="plus-area">
+            <button type="button" class="plus-button" aria-label="扩展功能" @click="plusMenuOpen = !plusMenuOpen">+</button>
+            <div v-if="plusMenuOpen" class="plus-menu">
+              <button type="button" @click="triggerImageUpload">上传图片识别</button>
+              <button type="button" @click="triggerFileUpload">上传文件</button>
+              <button type="button" @click="loadWeatherFromBrowser" :disabled="locationLoading">
+                {{ locationLoading ? '获取中...' : environmentReady ? '更新位置和天气' : '获取位置和天气' }}
+              </button>
+            </div>
+          </div>
+          <input ref="imageInputRef" class="hidden-input" type="file" accept="image/*" @change="onImageChange" />
+          <input ref="fileInputRef" class="hidden-input" type="file" multiple @change="onFileChange" />
+          <textarea
+            v-model="composerText"
+            rows="1"
+            :placeholder="composerPlaceholder"
+            :disabled="isBusy"
+            @keydown.enter.exact.prevent="submitComposer"
+          ></textarea>
+          <button type="submit" class="send-button" :disabled="isBusy || (!composerText.trim() && !selectedImage && !attachedFiles.length)">
+            ↑
+          </button>
+        </form>
+      </footer>
     </section>
   </main>
 </template>

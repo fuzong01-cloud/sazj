@@ -1,5 +1,5 @@
-import { API_BASE_URL } from './health'
 import { getAuthHeaders } from './auth'
+import { API_BASE_URL } from './health'
 
 export async function fetchHistory(limit = 10, offset = 0) {
   const params = new URLSearchParams({ limit: String(limit), offset: String(offset) })
