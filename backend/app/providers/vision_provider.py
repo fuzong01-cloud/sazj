@@ -1,12 +1,13 @@
 import base64
 import json
 import logging
-from typing import Any
+from typing import Any, AsyncIterator
 
 from app.providers.chat_completions_runtime import (
     ChatCompletionsRuntimeError,
     extract_chat_message,
     post_chat_completions,
+    stream_chat_completions,
 )
 from app.repositories.model_config_repository import get_enabled_provider, get_enabled_provider_by_id
 from app.schemas.model_config import ProviderType
@@ -38,44 +39,7 @@ class VisionProvider:
         deep_thinking: bool = False,
         weather: WeatherContext | None = None,
     ) -> PredictResponse:
-        mime_type = content_type if content_type.startswith("image/") else "image/png"
-        image_base64 = base64.b64encode(image_bytes).decode("ascii")
-        image_url = f"data:{mime_type};base64,{image_base64}"
-        thinking_instruction = (
-            "可以进行深度思考，但最终必须在 message.content 中输出 JSON。"
-            if deep_thinking
-            else "请直接输出最终 JSON，不要输出推理过程，不要返回 Markdown。"
-        )
-        prompt = (
-            f"{user_prompt or '请识别这张马铃薯叶片图片，并结合环境给出防治建议。'}\n"
-            f"{thinking_instruction}"
-            "字段：disease_name、confidence、risk_level、summary、suggestions。"
-            "confidence 为 0 到 1；summary 不超过 120 字；suggestions 最多 4 条。\n"
-            f"{format_weather_for_prompt(weather)}"
-        )
-        prompt = self._truncate_for_context(prompt)
-
-        # Kimi/OpenAI-compatible multimodal chat/completions payload.
-        # Do not send temperature/top_p/response_format/modalities/input/stream/etc.
-        payload = {
-            "model": self.config.model_name,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": prompt,
-                        },
-                        {
-                            "type": "image_url",
-                            "image_url": {"url": image_url},
-                        },
-                    ],
-                }
-            ],
-            "max_tokens": self.config.max_output_tokens or (3072 if deep_thinking else 2048),
-        }
+        payload = self._build_payload(image_bytes, content_type, user_prompt, deep_thinking, weather)
 
         try:
             data = await post_chat_completions(self.config, payload)
@@ -92,6 +56,31 @@ class VisionProvider:
             self.config.model_name,
             text[:3000],
         )
+        response = self.response_from_text(text=text, reasoning_content=message.reasoning_content, weather=weather)
+        logger.info("vision provider final response=%s", response.model_dump(mode="json"))
+        return response
+
+    async def stream_predict(
+        self,
+        image_bytes: bytes,
+        content_type: str,
+        user_prompt: str | None = None,
+        deep_thinking: bool = False,
+        weather: WeatherContext | None = None,
+    ) -> AsyncIterator[dict[str, str]]:
+        payload = self._build_payload(image_bytes, content_type, user_prompt, deep_thinking, weather)
+        try:
+            async for event in stream_chat_completions(self.config, payload):
+                yield event
+        except ChatCompletionsRuntimeError as exc:
+            raise VisionProviderError(f"视觉模型接口返回错误：{exc}") from exc
+
+    def response_from_text(
+        self,
+        text: str,
+        reasoning_content: str = "",
+        weather: WeatherContext | None = None,
+    ) -> PredictResponse:
         parsed = self._parse_json(text)
         confidence = self._normalize_confidence(parsed.get("confidence"))
         confidence_percent = round(confidence * 100, 2) if confidence is not None else None
@@ -111,11 +100,48 @@ class VisionProvider:
             suggestions=suggestions,
             content=text,
             raw_text=text,
-            reasoning_content=message.reasoning_content,
+            reasoning_content=reasoning_content,
             weather=weather,
         )
-        logger.info("vision provider final response=%s", response.model_dump(mode="json"))
         return response
+
+    def _build_payload(
+        self,
+        image_bytes: bytes,
+        content_type: str,
+        user_prompt: str | None,
+        deep_thinking: bool,
+        weather: WeatherContext | None,
+    ) -> dict[str, Any]:
+        mime_type = content_type if content_type.startswith("image/") else "image/png"
+        image_base64 = base64.b64encode(image_bytes).decode("ascii")
+        image_url = f"data:{mime_type};base64,{image_base64}"
+        thinking_instruction = (
+            "可以进行深度思考，但最终必须在 message.content 中输出 JSON。"
+            if deep_thinking
+            else "请直接输出最终 JSON，不要输出推理过程，不要返回 Markdown。"
+        )
+        prompt = (
+            f"{user_prompt or '请识别这张马铃薯叶片图片，并结合环境给出防治建议。'}\n"
+            f"{thinking_instruction}"
+            "字段：disease_name、confidence、risk_level、summary、suggestions。"
+            "confidence 为 0 到 1；summary 不超过 120 字；suggestions 最多 4 条。\n"
+            f"{format_weather_for_prompt(weather)}"
+        )
+        prompt = self._truncate_for_context(prompt)
+        return {
+            "model": self.config.model_name,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "image_url", "image_url": {"url": image_url}},
+                    ],
+                }
+            ],
+            "max_tokens": self.config.max_output_tokens or (3072 if deep_thinking else 2048),
+        }
 
     def _parse_json(self, text: str) -> dict[str, Any]:
         if not text:

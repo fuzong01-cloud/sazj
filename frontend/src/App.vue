@@ -10,10 +10,10 @@ import {
   uploadAvatar,
   updateProfile,
 } from './api/auth'
-import { askAssistant } from './api/chat'
+import { streamAssistant } from './api/chat'
 import { API_BASE_URL, fetchHealth } from './api/health'
 import { deleteHistoryRecord, fetchHistory, fetchHistoryRecord } from './api/history'
-import { predictImage } from './api/predict'
+import { streamPredictImage } from './api/predict'
 import { fetchEnabledProviders } from './api/providers'
 import { fetchWeather } from './api/weather'
 
@@ -626,30 +626,50 @@ async function submitTextMessage(text) {
   composerText.value = ''
   clearAttachments()
   chatLoading.value = true
+  const assistantMessage = {
+    role: 'assistant',
+    text: '',
+    reasoning: '',
+    provider: '',
+  }
+  messages.value.push(assistantMessage)
 
   try {
-    const result = await askAssistant({
-      question: text,
-      context,
-      provider_id: selectedProviderId.value ? Number(selectedProviderId.value) : null,
-      conversation_id: currentConversationId.value,
-      deep_thinking: deepThinking.value,
-    })
-    currentConversationId.value = result.conversation_id || currentConversationId.value
-    messages.value.push({
-      role: 'assistant',
-      text: result.answer || '模型未返回有效内容',
-      reasoning: result.reasoning_content || '',
-      provider: `${result.provider_name} / ${result.model_name}`,
-    })
+    await streamAssistant(
+      {
+        question: text,
+        context,
+        provider_id: selectedProviderId.value ? Number(selectedProviderId.value) : null,
+        conversation_id: currentConversationId.value,
+        deep_thinking: deepThinking.value,
+      },
+      {
+        onMeta(event) {
+          currentConversationId.value = event.conversation_id || currentConversationId.value
+          assistantMessage.provider = `${event.provider_name} / ${event.model_name}`
+        },
+        onReasoning(chunk) {
+          assistantMessage.reasoning += chunk
+        },
+        onContent(chunk) {
+          assistantMessage.text += chunk
+        },
+        onDone(event) {
+          currentConversationId.value = event.conversation_id || currentConversationId.value
+        },
+      },
+    )
+    if (!assistantMessage.text && assistantMessage.reasoning) {
+      assistantMessage.text = '模型已返回推理过程，但尚未生成最终答案。请增大后台输出长度、关闭深度思考，或稍后重试。'
+    }
+    if (!assistantMessage.text) {
+      assistantMessage.text = '模型未返回有效内容'
+    }
     await loadHistory()
   } catch (err) {
     if (err?.conversationId) currentConversationId.value = err.conversationId
     chatError.value = normalizeModelError(err instanceof Error ? err.message : 'AI 助手调用失败')
-    messages.value.push({
-      role: 'assistant',
-      text: chatError.value,
-    })
+    assistantMessage.text = chatError.value
     await loadHistory()
   } finally {
     chatLoading.value = false
@@ -670,33 +690,64 @@ async function submitImageMessage(text, imageAttachment) {
   attachedFiles.value = []
   selectedImagePreview.value = ''
   predictLoading.value = true
+  const assistantMessage = {
+    role: 'assistant',
+    type: 'prediction',
+    result: {
+      provider_name: activeProvider.value?.provider_name || '',
+      model_name: activeProvider.value?.model_name || '',
+      disease_name: '模型回复',
+      risk_level: '识别中',
+      summary: '',
+      content: '',
+      raw_text: '',
+      suggestions: [],
+      reasoning_content: '',
+    },
+    provider: activeProvider.value ? `${activeProvider.value.provider_name} / ${activeProvider.value.model_name}` : '',
+  }
+  messages.value.push(assistantMessage)
 
   try {
-    const result = await predictImage(
+    await streamPredictImage(
       imageAttachment.file,
       weatherContext.value,
       selectedProviderId.value ? Number(selectedProviderId.value) : null,
       currentConversationId.value,
       prompt,
       deepThinking.value,
+      {
+        onMeta(event) {
+          currentConversationId.value = event.conversation_id || currentConversationId.value
+          assistantMessage.provider = `${event.provider_name} / ${event.model_name}`
+          assistantMessage.result.provider_name = event.provider_name
+          assistantMessage.result.model_name = event.model_name
+        },
+        onReasoning(chunk) {
+          assistantMessage.result.reasoning_content += chunk
+        },
+        onContent(chunk) {
+          assistantMessage.result.content += chunk
+          assistantMessage.result.raw_text = assistantMessage.result.content
+          assistantMessage.result.summary = assistantMessage.result.content
+        },
+        onResult(result) {
+          assistantMessage.result = result
+          assistantMessage.provider = `${result.provider_name} / ${result.model_name}`
+          predictResult.value = result
+          if (result.weather) weatherContext.value = result.weather
+        },
+        onDone(event) {
+          currentConversationId.value = event.conversation_id || currentConversationId.value
+        },
+      },
     )
-    currentConversationId.value = result.conversation_id || currentConversationId.value
-    predictResult.value = result
-    if (result.weather) weatherContext.value = result.weather
-    messages.value.push({
-      role: 'assistant',
-      type: 'prediction',
-      result,
-      provider: `${result.provider_name} / ${result.model_name}`,
-    })
     await loadHistory()
   } catch (err) {
     if (err?.conversationId) currentConversationId.value = err.conversationId
     predictError.value = normalizeModelError(err instanceof Error ? err.message : '图片识别失败')
-    messages.value.push({
-      role: 'assistant',
-      text: predictError.value,
-    })
+    assistantMessage.type = ''
+    assistantMessage.text = predictError.value
     await loadHistory()
   } finally {
     predictLoading.value = false
@@ -942,10 +993,6 @@ onMounted(async () => {
               </option>
             </select>
           </label>
-          <label class="thinking-toggle" title="关闭时优先使用非推理快速模型，开启时优先使用深度思考模型">
-            <input v-model="deepThinking" type="checkbox" />
-            <span>深度思考</span>
-          </label>
           <button type="button" title="刷新模型列表" @click="loadProviders">刷新</button>
         </div>
 
@@ -1046,9 +1093,12 @@ onMounted(async () => {
         <p v-if="predictError" class="error-text inline-error">{{ predictError }}</p>
         <p v-if="attachmentError" class="error-text inline-error">{{ attachmentError }}</p>
         <p v-if="locationError" class="error-text inline-error">{{ locationError }}</p>
-        <p v-if="isBusy" class="empty-text inline-status">
-          {{ predictLoading ? '正在调用 Vision LLM 识别图片...' : '正在调用 Text LLM 生成回答...' }}
-        </p>
+        <article v-if="isBusy" class="message assistant status-message">
+          <div class="avatar">AI</div>
+          <div class="message-content">
+            <p>{{ predictLoading ? '正在调用 Vision LLM 识别图片...' : '正在调用 Text LLM 生成回答...' }}</p>
+          </div>
+        </article>
       </div>
 
       <footer class="composer-wrap">
@@ -1079,33 +1129,6 @@ onMounted(async () => {
           </div>
 
           <form class="composer-form" @submit.prevent="submitComposer">
-            <div class="plus-area">
-              <button
-                type="button"
-                class="plus-button"
-                title="添加文件等/"
-                aria-label="添加文件等"
-                :disabled="appLocked"
-                @click.stop="requireLogin() && (plusMenuOpen = !plusMenuOpen)"
-              >
-                +
-              </button>
-              <div v-if="plusMenuOpen" class="plus-menu" @click.stop>
-                <button
-                  type="button"
-                  class="has-tip"
-                  data-tip="当前支持 png、jpg、jpeg、webp 图片"
-                  @click="triggerFileUpload"
-                >
-                  <span>📎</span>
-                  上传图片
-                </button>
-                <button type="button" @click="loadWeatherFromBrowser" :disabled="locationLoading">
-                  <span>⌖</span>
-                  {{ locationLoading ? '获取中...' : environmentReady ? '更新位置和天气' : '获取位置和天气' }}
-                </button>
-              </div>
-            </div>
             <input
               ref="fileInputRef"
               class="hidden-input"
@@ -1121,9 +1144,48 @@ onMounted(async () => {
               :disabled="isBusy || appLocked"
               @keydown.enter.exact.prevent="submitComposer"
             ></textarea>
-            <button type="submit" class="send-button" :disabled="appLocked || isBusy || (!composerText.trim() && !attachedFiles.length)">
-              ↑
-            </button>
+            <div class="composer-actions">
+              <div class="plus-area">
+                <button
+                  type="button"
+                  class="plus-button"
+                  title="添加文件等/"
+                  aria-label="添加文件等"
+                  :disabled="appLocked"
+                  @click.stop="requireLogin() && (plusMenuOpen = !plusMenuOpen)"
+                >
+                  +
+                </button>
+                <div v-if="plusMenuOpen" class="plus-menu" @click.stop>
+                  <button
+                    type="button"
+                    class="has-tip"
+                    data-tip="当前支持 png、jpg、jpeg、webp 图片"
+                    @click="triggerFileUpload"
+                  >
+                    <span>📎</span>
+                    上传图片
+                  </button>
+                  <button type="button" @click="loadWeatherFromBrowser" :disabled="locationLoading">
+                    <span>⌖</span>
+                    {{ locationLoading ? '获取中...' : environmentReady ? '更新位置和天气' : '获取位置和天气' }}
+                  </button>
+                </div>
+              </div>
+              <button
+                type="button"
+                class="thinking-button"
+                :class="{ active: deepThinking }"
+                :disabled="appLocked || isBusy"
+                @click="deepThinking = !deepThinking"
+              >
+                深度思考
+              </button>
+              <span class="composer-spacer"></span>
+              <button type="submit" class="send-button" :disabled="appLocked || isBusy || (!composerText.trim() && !attachedFiles.length)">
+                ↑
+              </button>
+            </div>
           </form>
         </div>
       </footer>

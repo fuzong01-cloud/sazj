@@ -1,7 +1,8 @@
 import copy
 from dataclasses import dataclass
+import json
 import logging
-from typing import Any
+from typing import Any, AsyncIterator
 
 import httpx
 
@@ -45,6 +46,63 @@ async def post_chat_completions(config, payload: dict[str, Any], *, timeout: int
         raise ChatCompletionsRuntimeError(f"连接失败：{exc}") from exc
     except ValueError as exc:
         raise ChatCompletionsRuntimeError(f"响应不是合法 JSON：{exc}") from exc
+
+
+async def stream_chat_completions(
+    config,
+    payload: dict[str, Any],
+    *,
+    timeout: int = 120,
+) -> AsyncIterator[dict[str, str]]:
+    url = build_chat_completions_url(config.base_url)
+    headers = {
+        "Authorization": f"Bearer {config.api_key}",
+        "Content-Type": "application/json",
+    }
+    stream_payload = copy.deepcopy(payload)
+    stream_payload["stream"] = True
+
+    logger.info("runtime stream request url=%s", url)
+    logger.info("runtime stream request model=%s", stream_payload.get("model"))
+    logger.info("runtime stream request payload=%s", sanitize_payload_for_log(stream_payload))
+
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            async with client.stream("POST", url, headers=headers, json=stream_payload) as response:
+                if response.status_code >= 400:
+                    response_text = (await response.aread()).decode("utf-8", errors="replace")
+                    logger.info("runtime stream upstream status=%s", response.status_code)
+                    logger.info("runtime stream upstream response=%s", response_text[:3000])
+                    message = extract_upstream_error_message(response_text)
+                    raise ChatCompletionsRuntimeError(f"HTTP {response.status_code}: {message}")
+
+                logger.info("runtime stream upstream status=%s", response.status_code)
+                async for line in response.aiter_lines():
+                    line = line.strip()
+                    if not line or not line.startswith("data:"):
+                        continue
+                    data_text = line.removeprefix("data:").strip()
+                    if data_text == "[DONE]":
+                        yield {"type": "done", "text": ""}
+                        break
+                    try:
+                        data = json.loads(data_text)
+                    except json.JSONDecodeError:
+                        continue
+
+                    choice = (data.get("choices") or [{}])[0]
+                    delta = choice.get("delta") or {}
+                    reasoning = delta.get("reasoning_content")
+                    content = delta.get("content")
+                    if reasoning:
+                        yield {"type": "reasoning", "text": str(reasoning)}
+                    if content:
+                        yield {"type": "content", "text": str(content)}
+                    finish_reason = choice.get("finish_reason")
+                    if finish_reason:
+                        yield {"type": "finish", "text": str(finish_reason)}
+    except httpx.HTTPError as exc:
+        raise ChatCompletionsRuntimeError(f"连接失败：{exc}") from exc
 
 
 def build_chat_completions_url(base_url: str) -> str:

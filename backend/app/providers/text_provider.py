@@ -1,10 +1,12 @@
 import logging
 from dataclasses import dataclass
+from typing import AsyncIterator
 
 from app.providers.chat_completions_runtime import (
     ChatCompletionsRuntimeError,
     extract_chat_message,
     post_chat_completions,
+    stream_chat_completions,
 )
 from app.repositories.model_config_repository import get_enabled_provider, get_enabled_provider_by_id
 from app.schemas.model_config import ProviderType
@@ -31,24 +33,7 @@ class TextProvider:
         self.config = config
 
     async def generate(self, system_prompt: str, user_prompt: str, deep_thinking: bool = False) -> TextGenerationResult:
-        # Keep runtime payload close to the Kimi-verified minimal chat/completions shape:
-        # model + single user message + max_tokens, no temperature/top_p/response_format/etc.
-        thinking_instruction = (
-            "可以进行深度思考，但最终必须在 message.content 中输出答案。"
-            if deep_thinking
-            else "请直接输出最终答案，不要展示推理过程。"
-        )
-        content = self._truncate_for_context(f"{system_prompt}\n{thinking_instruction}\n\n{user_prompt}".strip())
-        payload = {
-            "model": self.config.model_name,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": content,
-                }
-            ],
-            "max_tokens": self.config.max_output_tokens or (1536 if deep_thinking else 768),
-        }
+        payload = self._build_payload(system_prompt, user_prompt, deep_thinking)
 
         try:
             data = await post_chat_completions(self.config, payload)
@@ -68,6 +53,39 @@ class TextProvider:
             )
         except ChatCompletionsRuntimeError as exc:
             raise TextProviderError(f"文本模型接口返回错误：{exc}") from exc
+
+    async def stream_generate(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        deep_thinking: bool = False,
+    ) -> AsyncIterator[dict[str, str]]:
+        payload = self._build_payload(system_prompt, user_prompt, deep_thinking)
+        try:
+            async for event in stream_chat_completions(self.config, payload):
+                yield event
+        except ChatCompletionsRuntimeError as exc:
+            raise TextProviderError(f"文本模型接口返回错误：{exc}") from exc
+
+    def _build_payload(self, system_prompt: str, user_prompt: str, deep_thinking: bool) -> dict:
+        # Keep runtime payload close to the Kimi-verified minimal chat/completions shape:
+        # model + single user message + max_tokens, no temperature/top_p/response_format/etc.
+        thinking_instruction = (
+            "可以进行深度思考，但最终必须在 message.content 中输出答案。"
+            if deep_thinking
+            else "请直接输出最终答案，不要展示推理过程。"
+        )
+        content = self._truncate_for_context(f"{system_prompt}\n{thinking_instruction}\n\n{user_prompt}".strip())
+        return {
+            "model": self.config.model_name,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": content,
+                }
+            ],
+            "max_tokens": self.config.max_output_tokens or (1536 if deep_thinking else 768),
+        }
 
     def _truncate_for_context(self, text: str) -> str:
         if not self.config.max_context_tokens:
