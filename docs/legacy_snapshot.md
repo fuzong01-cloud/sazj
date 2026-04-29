@@ -57,8 +57,14 @@
 - `main/sample/potato.png`
 - Kaggle / PlantVillage 相关说明
 - Colab `/content/...` 路径和训练脚本残留
+
+以下旧运行入口已在 `v0.5.2` 清理，不再保留在仓库根目录：
+
+- `app.py` 旧 Flask 下线提示入口
 - `webapp.py` Streamlit Demo
-- `Procfile` 和 `setup.sh` 中的旧 Streamlit 部署路径
+- `Procfile` 旧 Heroku/Streamlit 启动文件
+- `setup.sh` 旧 Streamlit Cloud 配置脚本
+- 根目录 `requirements.txt` 旧 Flask 依赖文件
 
 ## 当前接口
 

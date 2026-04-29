@@ -9,8 +9,13 @@
 - `../main/Potato Leaf Disease Classification.ipynb`
 - `../main/Potato Leaf Disease Classification (COLAB).ipynb`
 - `../main/sample/potato.png`
+
+以下旧运行入口已在 `v0.5.2` 删除，不再保留在仓库根目录：
+
+- `../app.py`
 - `../webapp.py`
 - `../Procfile`
 - `../setup.sh`
+- `../requirements.txt`
 
 后续清理阶段可以在确认资料归档策略后，将这些文件迁入 `legacy/` 或外部制品存储。

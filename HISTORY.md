@@ -1,5 +1,25 @@
 # 版本历史
 
+## v0.5.2 legacy entry cleanup baseline
+
+日期：2026-04-29
+
+该版本清理旧运行入口和旧部署残留，避免新开发者误用 Flask/Streamlit 旧主线。
+
+本基线已完成：
+
+- 删除根目录 `app.py` 旧 Flask 下线提示入口。
+- 删除根目录 `webapp.py` 旧 Streamlit Demo。
+- 删除根目录 `Procfile` 和 `setup.sh` 旧 Streamlit/Heroku 部署残留。
+- 删除根目录旧 `requirements.txt`，后端依赖统一使用 `backend/requirements.txt`。
+- 清理本地临时 SQLite 探测文件、旧 `__pycache__` 和空 `templates/` 目录。
+- 更新 README 和 legacy 快照，明确当前入口为 `start.py`、`start_frontend.py` 和 `backend/app/main.py`。
+
+已知限制：
+
+- `final_model.h5`、Notebook、PPT、策划书仍作为 legacy 资料保留。
+- `main/` 下训练脚本和 Notebook 仍待后续归档或迁移，不参与新系统运行。
+
 ## v0.5.1 SQLite local start baseline
 
 日期：2026-04-29

@@ -6,7 +6,7 @@
 
 ## 当前状态
 
-- 版本基线：`v0.5.1 SQLite local start baseline`。
+- 版本基线：`v0.5.2 legacy entry cleanup baseline`。
 - 当前后端入口：`backend/app/main.py`。
 - 当前前端入口：`frontend/src/main.js`。
 - 当前识别接口：`POST /api/predict`，通过用户配置的 Vision LLM API 完成。
@@ -28,13 +28,12 @@
 - 数据库：本地默认 SQLite + SQLAlchemy，部署阶段可切换 PostgreSQL
 - 外部模型调用：httpx + OpenAI-compatible chat/completions
 - 前端：Vue + Vite + JavaScript
-- 部署：Windows Server + Uvicorn + PostgreSQL for Windows + Caddy/NSSM
+- 部署：Windows Server + Uvicorn + SQLite 默认演示库 + Caddy/NSSM
 
 ## 仓库结构
 
 ```text
 .
-|-- app.py                                  # 旧 Flask 页面下线提示
 |-- build.py                                # Python 构建入口：安装依赖并构建前端
 |-- start.py                                # Python 启动入口：默认 SQLite 启动 FastAPI 后端
 |-- start_frontend.py                       # Python 前端开发服务启动入口
@@ -59,6 +58,8 @@
 |-- README.md
 `-- HISTORY.md
 ```
+
+旧的根目录 `app.py`、`webapp.py`、`Procfile`、`setup.sh` 和根目录 `requirements.txt` 已清理。当前后端依赖以 `backend/requirements.txt` 为准。
 
 ## 本地 SQLite 配置
 
