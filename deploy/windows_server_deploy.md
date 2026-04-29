@@ -2,7 +2,7 @@
 
 本文档是当前项目的默认部署方案，目标环境为 Windows Server、2 核 CPU、2GB 内存、40GB 存储、一个月演示周期。
 
-服务器只运行 Vue 静态页面、FastAPI 后端、PostgreSQL、上传文件存储和日志记录。不要在服务器上训练 CNN，不要运行本地大模型，不要把 `final_model.h5` 接回新系统主线。
+服务器只运行 Vue 静态页面、FastAPI 后端、SQLite 数据库文件、上传文件存储和日志记录。不要在服务器上训练 CNN，不要运行本地大模型，不要把 `final_model.h5` 接回新系统主线。
 
 ## 推荐目录
 
@@ -37,17 +37,15 @@ node --version
 npm --version
 ```
 
-## 安装 PostgreSQL
+## 数据库选择
 
-1. 安装 PostgreSQL for Windows。
-2. 记录安装时设置的 `postgres` 用户密码。
-3. 使用 pgAdmin 或 `psql` 创建数据库：
+当前一个月轻量演示默认使用 SQLite，不需要额外安装 PostgreSQL。数据库文件建议放在：
 
-```sql
-CREATE DATABASE sazj;
+```text
+C:\sazj\backend\sazj.sqlite3
 ```
 
-2GB 内存服务器上建议保持默认连接数或适当降低，不要同时运行重型数据库任务。
+如果后续进入长期运行或多人并发阶段，再单独切换 PostgreSQL。
 
 ## 配置环境变量
 
@@ -64,12 +62,9 @@ Copy-Item C:\sazj\.env C:\sazj\backend\.env
 ```text
 APP_ENV=production
 API_PREFIX=/api
-DATABASE_URL=postgresql+psycopg://postgres:你的密码@127.0.0.1:5432/sazj
+DATABASE_URL=sqlite:///C:/sazj/backend/sazj.sqlite3
 AUTO_CREATE_TABLES=true
-DB_POOL_SIZE=2
-DB_MAX_OVERFLOW=1
-DB_POOL_TIMEOUT=30
-DB_POOL_RECYCLE=1800
+SQLITE_JOURNAL_MODE=OFF
 FRONTEND_ORIGINS=http://服务器公网IP
 UPLOAD_DIR=C:\sazj\uploads
 LOG_DIR=C:\sazj\logs
@@ -79,8 +74,6 @@ ACCESS_TOKEN_EXPIRE_MINUTES=1440
 MAX_UPLOAD_BYTES=8388608
 ```
 
-2GB 内存服务器建议保持较小数据库连接池：`DB_POOL_SIZE=2`、`DB_MAX_OVERFLOW=1`。
-
 `PROVIDER_SECRET_KEY` 用于加密模型提供商 API Key。部署后不要随意修改，否则旧配置将无法解密。
 
 `JWT_SECRET_KEY` 用于签发登录访问令牌。修改后旧 token 会失效，用户需要重新登录。
@@ -88,11 +81,11 @@ MAX_UPLOAD_BYTES=8388608
 ## 初始化后端
 
 ```powershell
-cd C:\sazj\backend
+cd C:\sazj
 python -m venv venv
 .\venv\Scripts\activate
 python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
+python build.py --skip-frontend
 ```
 
 当前阶段使用 `AUTO_CREATE_TABLES=true` 自动创建表。启动后端时会创建 `model_configs` 表。后续正式迁移阶段再接 Alembic。
@@ -109,9 +102,9 @@ New-Item -ItemType Directory -Force C:\sazj\uploads
 ## 启动 FastAPI 后端
 
 ```powershell
-cd C:\sazj\backend
+cd C:\sazj
 .\venv\Scripts\activate
-uvicorn app.main:app --host 0.0.0.0 --port 8000
+python start.py --host 0.0.0.0 --port 8000 --no-reload
 ```
 
 服务器本机验证：
@@ -174,7 +167,7 @@ http://服务器公网IP/api/health
 
 - `80`：前端页面和反向代理后的 API。
 - `8000`：仅在没有反向代理或需要临时调试时开放。
-- `5432`：不建议对公网开放 PostgreSQL，只允许本机访问。
+- 不需要开放数据库端口；SQLite 是本地文件。
 
 详见 [windows_firewall_notes.md](./windows_firewall_notes.md)。
 
@@ -193,7 +186,7 @@ http://服务器公网IP/api/health
 后续功能完成后再补充验证：
 
 - 用户注册登录。
-- 识别历史保存到 PostgreSQL。
+- 识别历史保存到 SQLite。
 - 日志写入 `C:\sazj\logs` 或 `system_logs` 表。
 - 区域统计和风险预警页面可用。
 

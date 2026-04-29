@@ -16,6 +16,7 @@
 - `provider_type` 当前支持 `vision` 和 `text`。
 - 默认部署目标改为 Windows Server 轻量云服务器，2 核 CPU、2GB 内存、40GB 存储。
 - Ubuntu + systemd + Linux Nginx + Gunicorn 不再作为默认部署方案。
+- 本地开发和短期演示默认切回 SQLite，避免因未安装 PostgreSQL 导致后端无法启动。
 - 后端已读取 `UPLOAD_DIR`、`LOG_DIR` 和轻量数据库连接池配置。
 - 启动时会自动创建上传目录、日志目录，并写入 `backend.log`。
 - Provider API Key 新写入和更新时会加密保存，API 响应不返回明文。
@@ -82,7 +83,7 @@
 
 - 旧数据库中历史明文 API Key 需要重新保存一次配置，才能转换为加密字段。
 - 尚未接入 Alembic，开发期暂用 `create_all`。
-- 尚未实现用户系统、历史记录、区域统计和日志记录。
+- 尚未实现区域统计和系统日志表。
 - 当前已提供历史记录查询、分页和删除 API，登录后按用户过滤，未登录时返回全局记录。
 - 用户接口已建立，模型配置和历史记录已接入用户上下文；区域统计还未接入用户归属。
 - 前端主页面已展示最近识别历史，点击记录可查看摘要、建议、置信度和原始模型输出。
@@ -96,25 +97,20 @@
 .\.venv\Scripts\python.exe -m pip install -r backend\requirements.txt
 ```
 
-PostgreSQL 环境变量示例：
+默认 SQLite 启动：
 
 ```powershell
-$env:DATABASE_URL="postgresql+psycopg://postgres:postgres@127.0.0.1:5432/sazj"
-$env:AUTO_CREATE_TABLES="true"
+python start.py
 ```
 
-没有本地 PostgreSQL 时，可用内存 SQLite 临时验证 SQLAlchemy 仓储行为：
+如需只构建后端依赖：
 
 ```powershell
-$env:DATABASE_URL="sqlite:///:memory:"
-$env:AUTO_CREATE_TABLES="true"
-cd backend
-..\.venv\Scripts\python.exe -c "from app.db.init_db import create_db_and_tables; create_db_and_tables(); from fastapi.testclient import TestClient; from app.main import app; c=TestClient(app); print(c.post('/api/model-configs', json={'provider_name':'mock','provider_type':'vision','base_url':'https://example.com/v1','api_key':'secret','model_name':'vision-model','enabled':True}).json()); print(c.get('/api/model-configs').json())"
+python build.py --skip-frontend
 ```
 
 预期结果：
 
 - 依赖安装成功。
-- 数据库能创建 `model_configs` 表。
-- `POST /api/model-configs` 能写入数据库。
-- `GET /api/model-configs` 能读出刚写入的配置。
+- 后端启动时自动创建 SQLite 数据库文件。
+- `http://127.0.0.1:8000/api/health` 返回健康状态。

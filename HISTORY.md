@@ -1,5 +1,27 @@
 # 版本历史
 
+## v0.5.1 SQLite local start baseline
+
+日期：2026-04-29
+
+该版本将本地开发和短期演示默认数据库切回 SQLite，并新增 Python 构建/启动入口。
+
+本基线已完成：
+
+- 后端默认 `DATABASE_URL` 从 PostgreSQL 改为 `backend/sazj.sqlite3` 对应的 SQLite URL。
+- SQLite 默认启用 `SQLITE_JOURNAL_MODE=OFF`，用于兼容当前 Windows 本地磁盘环境。
+- 新增根目录 `start.py`，默认设置 SQLite、上传目录、日志目录并启动 FastAPI。
+- 新增根目录 `build.py`，用于安装后端依赖，并可选安装/构建前端。
+- 新增根目录 `start_frontend.py`，用于通过 Python 启动前端开发服务。
+- `backend/.env.example` 改为 SQLite 默认配置。
+- README 和 Windows 部署文档改为 SQLite 默认、PostgreSQL 可选。
+- NSSM 文档改为通过 `python start.py` 启动后端服务。
+
+已知限制：
+
+- SQLite 适合本地开发和短期演示，不适合作为长期高并发数据库。
+- 如果后续切换 PostgreSQL，需要重新配置 `DATABASE_URL` 并做迁移方案。
+
 ## v0.5.0 user-scoped provider config baseline
 
 日期：2026-04-29

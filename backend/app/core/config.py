@@ -16,6 +16,10 @@ def _split_origins(value: str) -> list[str]:
     return [item.strip() for item in value.split(",") if item.strip()]
 
 
+def _default_sqlite_url() -> str:
+    return f"sqlite:///{(BACKEND_DIR / 'sazj.sqlite3').as_posix()}"
+
+
 @dataclass(frozen=True)
 class Settings:
     app_name: str = os.getenv("APP_NAME", "薯安智检 API")
@@ -23,13 +27,14 @@ class Settings:
     api_prefix: str = os.getenv("API_PREFIX", "/api")
     database_url: str = os.getenv(
         "DATABASE_URL",
-        "postgresql+psycopg://postgres:postgres@127.0.0.1:5432/sazj",
+        _default_sqlite_url(),
     )
     auto_create_tables: bool = os.getenv("AUTO_CREATE_TABLES", "true").lower() == "true"
     db_pool_size: int = int(os.getenv("DB_POOL_SIZE", "2"))
     db_max_overflow: int = int(os.getenv("DB_MAX_OVERFLOW", "1"))
     db_pool_timeout: int = int(os.getenv("DB_POOL_TIMEOUT", "30"))
     db_pool_recycle: int = int(os.getenv("DB_POOL_RECYCLE", "1800"))
+    sqlite_journal_mode: str = os.getenv("SQLITE_JOURNAL_MODE", "OFF")
     model_path: Path = Path(os.getenv("MODEL_PATH", str(REPO_ROOT / "final_model.h5")))
     upload_dir: Path = Path(os.getenv("UPLOAD_DIR", str(REPO_ROOT / "uploads")))
     log_dir: Path = Path(os.getenv("LOG_DIR", str(REPO_ROOT / "logs")))

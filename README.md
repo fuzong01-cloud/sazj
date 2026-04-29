@@ -6,7 +6,7 @@
 
 ## 当前状态
 
-- 版本基线：`v0.4.0 PostgreSQL model config baseline`。
+- 版本基线：`v0.5.1 SQLite local start baseline`。
 - 当前后端入口：`backend/app/main.py`。
 - 当前前端入口：`frontend/src/main.js`。
 - 当前识别接口：`POST /api/predict`，通过用户配置的 Vision LLM API 完成。
@@ -25,7 +25,7 @@
 ## 技术栈
 
 - 后端：Python + FastAPI + Uvicorn
-- 数据库：PostgreSQL + SQLAlchemy
+- 数据库：本地默认 SQLite + SQLAlchemy，部署阶段可切换 PostgreSQL
 - 外部模型调用：httpx + OpenAI-compatible chat/completions
 - 前端：Vue + Vite + JavaScript
 - 部署：Windows Server + Uvicorn + PostgreSQL for Windows + Caddy/NSSM
@@ -35,6 +35,9 @@
 ```text
 .
 |-- app.py                                  # 旧 Flask 页面下线提示
+|-- build.py                                # Python 构建入口：安装依赖并构建前端
+|-- start.py                                # Python 启动入口：默认 SQLite 启动 FastAPI 后端
+|-- start_frontend.py                       # Python 前端开发服务启动入口
 |-- final_model.h5                          # legacy 本地 CNN 模型资料，不参与新系统运行
 |-- backend/
 |   |-- app/
@@ -57,17 +60,20 @@
 `-- HISTORY.md
 ```
 
-## PostgreSQL 配置
+## 本地 SQLite 配置
 
-创建数据库后，在 `backend/.env` 中配置：
+本地开发默认使用 SQLite，不再要求先安装 PostgreSQL。默认数据库文件位于：
 
 ```text
-DATABASE_URL=postgresql+psycopg://postgres:postgres@127.0.0.1:5432/sazj
+backend/sazj.sqlite3
+```
+
+如需显式配置，可在 `backend/.env` 中写入：
+
+```text
+DATABASE_URL=sqlite:///./sazj.sqlite3
 AUTO_CREATE_TABLES=true
-DB_POOL_SIZE=2
-DB_MAX_OVERFLOW=1
-DB_POOL_TIMEOUT=30
-DB_POOL_RECYCLE=1800
+SQLITE_JOURNAL_MODE=OFF
 UPLOAD_DIR=../uploads
 LOG_DIR=../logs
 PROVIDER_SECRET_KEY=development-provider-secret-key-change-me
@@ -77,7 +83,9 @@ ACCESS_TOKEN_EXPIRE_MINUTES=1440
 
 当前阶段使用 SQLAlchemy `create_all` 在开发环境自动建表。后续进入正式迁移阶段时，应改为 Alembic 管理迁移。
 
-2 核 2GB Windows Server 默认采用轻量连接池：常驻连接 2 个，临时溢出连接 1 个。后端启动时会自动创建 `UPLOAD_DIR` 和 `LOG_DIR`，并在 `LOG_DIR/backend.log` 写入滚动日志。
+`SQLITE_JOURNAL_MODE=OFF` 是当前 Windows 本地开发兼容设置，用于避开部分磁盘/同步目录环境下 SQLite journal 文件导致的 `disk I/O error`。长期部署或关键数据场景建议切换 PostgreSQL。
+
+部署到 Windows Server 时仍可切换 PostgreSQL。2 核 2GB Windows Server 建议采用轻量连接池：常驻连接 2 个，临时溢出连接 1 个。后端启动时会自动创建 `UPLOAD_DIR` 和 `LOG_DIR`，并在 `LOG_DIR/backend.log` 写入滚动日志。
 
 `PROVIDER_SECRET_KEY` 用于加密模型提供商 API Key。生产环境必须替换为 32 字符以上随机密钥，并在部署后保持稳定。
 
@@ -106,20 +114,22 @@ C:\sazj\
 
 ## 本地启动
 
-后端：
+首次构建：
 
 ```powershell
-cd backend
-..\.venv\Scripts\python.exe -m pip install -r requirements.txt
-..\.venv\Scripts\python.exe -m uvicorn app.main:app --reload
+python build.py
 ```
 
-前端：
+启动后端：
 
 ```powershell
-cd frontend
-npm install
-npm run dev
+python start.py
+```
+
+启动前端开发服务：
+
+```powershell
+python start_frontend.py
 ```
 
 访问：
@@ -201,7 +211,7 @@ Content-Type: application/json
 1. 完成模型配置 PostgreSQL 持久化。
 2. 建立 Windows Server 2 核 2GB 演示部署方案。
 3. 落地 Windows 部署运行参数、轻量日志和数据库连接池配置。
-4. 补充图片文件保存。
+4. 本地开发默认切回 SQLite，并提供 Python 构建/启动入口。
 5. 增加前端模型配置管理页面。
 6. 补充图片文件保存。
 7. 增加前端登录态路由保护和用户资料页。

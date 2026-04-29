@@ -28,19 +28,19 @@ sazj-backend
 程序路径：
 
 ```text
-C:\sazj\backend\venv\Scripts\python.exe
+C:\sazj\venv\Scripts\python.exe
 ```
 
 启动参数：
 
 ```text
--m uvicorn app.main:app --host 0.0.0.0 --port 8000
+C:\sazj\start.py --host 0.0.0.0 --port 8000 --no-reload
 ```
 
 工作目录：
 
 ```text
-C:\sazj\backend
+C:\sazj
 ```
 
 ## 图形界面注册
@@ -51,9 +51,9 @@ C:\tools\nssm\nssm.exe install sazj-backend
 
 在弹窗中填写：
 
-- `Path`：`C:\sazj\backend\venv\Scripts\python.exe`
-- `Startup directory`：`C:\sazj\backend`
-- `Arguments`：`-m uvicorn app.main:app --host 0.0.0.0 --port 8000`
+- `Path`：`C:\sazj\venv\Scripts\python.exe`
+- `Startup directory`：`C:\sazj`
+- `Arguments`：`C:\sazj\start.py --host 0.0.0.0 --port 8000 --no-reload`
 
 在 `I/O` 页配置日志：
 
@@ -71,8 +71,8 @@ C:\sazj\logs\backend.log
 ## 命令行注册
 
 ```powershell
-C:\tools\nssm\nssm.exe install sazj-backend C:\sazj\backend\venv\Scripts\python.exe "-m uvicorn app.main:app --host 0.0.0.0 --port 8000"
-C:\tools\nssm\nssm.exe set sazj-backend AppDirectory C:\sazj\backend
+C:\tools\nssm\nssm.exe install sazj-backend C:\sazj\venv\Scripts\python.exe "C:\sazj\start.py --host 0.0.0.0 --port 8000 --no-reload"
+C:\tools\nssm\nssm.exe set sazj-backend AppDirectory C:\sazj
 C:\tools\nssm\nssm.exe set sazj-backend AppStdout C:\sazj\logs\backend.out.log
 C:\tools\nssm\nssm.exe set sazj-backend AppStderr C:\sazj\logs\backend.err.log
 C:\tools\nssm\nssm.exe set sazj-backend Start SERVICE_AUTO_START
@@ -116,7 +116,7 @@ Invoke-RestMethod http://127.0.0.1:8000/api/health
 
 - 检查 `C:\sazj\logs\backend.err.log`。
 - 确认虚拟环境依赖已安装。
-- 确认 `backend\.env` 中 `DATABASE_URL` 正确。
+- 确认 `.env` 或 `backend\.env` 中 `DATABASE_URL` 正确。
 
 服务能启动但外部不能访问：
 

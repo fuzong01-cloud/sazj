@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -28,4 +28,13 @@ engine = create_engine(
     connect_args=connect_args,
     **engine_kwargs,
 )
+
+if settings.database_url.startswith("sqlite") and settings.sqlite_journal_mode:
+
+    @event.listens_for(engine, "connect")
+    def set_sqlite_pragmas(dbapi_connection, _connection_record) -> None:
+        cursor = dbapi_connection.cursor()
+        cursor.execute(f"PRAGMA journal_mode={settings.sqlite_journal_mode}")
+        cursor.close()
+
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)

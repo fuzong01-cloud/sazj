@@ -1,34 +1,29 @@
 # Windows Server .env 示例
 
-建议生产环境主配置放在：
+建议生产或演示环境主配置放在：
 
 ```text
 C:\sazj\.env
 ```
 
-当前后端默认读取：
+短期演示部署也可以复制一份到：
 
 ```text
 C:\sazj\backend\.env
 ```
 
-短期演示部署可以把根目录 `.env` 复制一份到 `backend\.env`。
+## SQLite 默认配置
 
-建议 Windows Server 中的目录配置使用绝对路径。相对路径会按 `backend\` 目录解析。
-
-## 当前可用配置
+当前项目已切回 SQLite 作为本地和短期演示默认数据库，避免 Windows Server 上额外安装 PostgreSQL。
 
 ```text
 APP_NAME=薯安智检 API
 APP_ENV=production
 API_PREFIX=/api
 
-DATABASE_URL=postgresql+psycopg://postgres:请替换为真实密码@127.0.0.1:5432/sazj
+DATABASE_URL=sqlite:///C:/sazj/backend/sazj.sqlite3
 AUTO_CREATE_TABLES=true
-DB_POOL_SIZE=2
-DB_MAX_OVERFLOW=1
-DB_POOL_TIMEOUT=30
-DB_POOL_RECYCLE=1800
+SQLITE_JOURNAL_MODE=OFF
 
 MAX_UPLOAD_BYTES=8388608
 UPLOAD_DIR=C:\sazj\uploads
@@ -36,6 +31,7 @@ LOG_DIR=C:\sazj\logs
 LOG_LEVEL=INFO
 LOG_MAX_BYTES=5242880
 LOG_BACKUP_COUNT=3
+
 PROVIDER_SECRET_KEY=请替换为32字符以上随机密钥
 JWT_SECRET_KEY=请替换为32字符以上随机密钥
 ACCESS_TOKEN_EXPIRE_MINUTES=1440
@@ -47,57 +43,33 @@ FRONTEND_ORIGINS=http://服务器公网IP
 `PROVIDER_SECRET_KEY` 用于加密模型提供商的 API Key / Token。要求：
 
 - 至少 32 个字符。
-- 生产环境必须替换默认值。
-- 部署后不要随意修改；修改后，数据库中已有的 provider API Key 将无法解密，需要重新配置。
+- 生产或演示环境必须替换默认值。
+- 部署后不要随意修改；修改后，数据库中已有 provider API Key 将无法解密，需要重新配置。
 
-## PostgreSQL 连接说明
+## 登录令牌密钥
 
-本机 PostgreSQL：
+`JWT_SECRET_KEY` 用于签发登录访问令牌。要求：
+
+- 生产或演示环境必须替换默认值。
+- 建议使用 32 字符以上随机字符串。
+- 修改后旧登录 token 会失效，用户需要重新登录。
+
+## PostgreSQL 可选配置
+
+如果后续需要多人长期使用或更强并发，再切换 PostgreSQL：
 
 ```text
 DATABASE_URL=postgresql+psycopg://postgres:密码@127.0.0.1:5432/sazj
-```
-
-不要把 PostgreSQL 暴露到公网。2GB 内存服务器上，数据库只服务本机后端即可。
-
-## 低内存连接池建议
-
-2核2G Windows Server 建议保持较小连接池：
-
-```text
 DB_POOL_SIZE=2
 DB_MAX_OVERFLOW=1
 DB_POOL_TIMEOUT=30
 DB_POOL_RECYCLE=1800
 ```
 
-这表示常驻连接最多 2 个，临时溢出连接最多 1 个，避免演示服务器内存被数据库连接耗尽。
-
-## CORS 配置
-
-如果前端通过公网 IP 访问：
-
-```text
-FRONTEND_ORIGINS=http://服务器公网IP
-```
-
-如果临时使用前端开发服务器：
-
-```text
-FRONTEND_ORIGINS=http://服务器公网IP,http://127.0.0.1:5173,http://localhost:5173
-```
+2 核 2GB Windows Server 上应保持较小连接池。不要把 PostgreSQL 暴露到公网。
 
 ## 敏感信息注意事项
 
 - `.env` 不要提交到 Git。
 - API Key 不要写进 README、前端代码或截图。
-- Provider API Key 会加密后再存入 PostgreSQL。
-- 如果发现旧数据库中存在明文 provider API Key，请在当前版本启动后重新保存一次该模型配置。
-
-## 用户登录令牌
-
-`JWT_SECRET_KEY` 用于签发登录访问令牌。要求：
-
-- 生产环境必须替换默认值。
-- 建议使用 32 字符以上随机字符串。
-- 修改后，旧登录 token 会失效，用户需要重新登录。
+- Provider API Key 会加密后再存入数据库。

@@ -1,56 +1,72 @@
 # 后端服务
 
-本目录是薯安智检的 FastAPI 后端。当前版本提供健康检查、模型配置、外部 Vision/Text Provider 调用入口，并已将模型配置接入 SQLAlchemy 数据库仓储。
+本目录是薯安智检的 FastAPI 后端。当前后端提供健康检查、用户注册登录、用户级模型配置、外部 Vision/Text Provider 调用、识别记录持久化和历史记录查询。
 
-## 启动方式
+## 本地启动
 
-使用根目录已有 `.venv`：
+推荐从项目根目录启动：
 
 ```powershell
-cd backend
-..\.venv\Scripts\python.exe -m pip install -r requirements.txt
-..\.venv\Scripts\python.exe -m uvicorn app.main:app --reload
+python start.py
+```
+
+`start.py` 会默认使用 SQLite，并自动设置：
+
+```text
+DATABASE_URL=sqlite:///backend/sazj.sqlite3
+AUTO_CREATE_TABLES=true
+SQLITE_JOURNAL_MODE=OFF
+UPLOAD_DIR=uploads
+LOG_DIR=logs
+```
+
+访问：
+
+```text
+http://127.0.0.1:8000/docs
+http://127.0.0.1:8000/api/health
+```
+
+## 构建依赖
+
+推荐从项目根目录执行：
+
+```powershell
+python build.py --skip-frontend
+```
+
+如需同时安装前端依赖并构建前端：
+
+```powershell
+python build.py
+```
+
+前端开发服务从项目根目录启动：
+
+```powershell
+python start_frontend.py
 ```
 
 ## 数据库配置
 
-复制 `.env.example` 为 `.env` 后配置 PostgreSQL：
+本地开发默认使用 SQLite，数据库文件为：
 
 ```text
-DATABASE_URL=postgresql+psycopg://postgres:postgres@127.0.0.1:5432/sazj
+backend/sazj.sqlite3
+```
+
+如果需要切换 PostgreSQL，可在 `backend/.env` 或根目录 `.env` 中配置：
+
+```text
+DATABASE_URL=postgresql+psycopg://postgres:密码@127.0.0.1:5432/sazj
 AUTO_CREATE_TABLES=true
 DB_POOL_SIZE=2
 DB_MAX_OVERFLOW=1
 DB_POOL_TIMEOUT=30
 DB_POOL_RECYCLE=1800
-UPLOAD_DIR=../uploads
-LOG_DIR=../logs
-PROVIDER_SECRET_KEY=development-provider-secret-key-change-me
-JWT_SECRET_KEY=development-jwt-secret-key-change-me
-ACCESS_TOKEN_EXPIRE_MINUTES=1440
 ```
 
-当前阶段开发环境使用 SQLAlchemy `create_all` 自动建表。后续正式迁移阶段应改为 Alembic。
-
-`UPLOAD_DIR` 和 `LOG_DIR` 会在后端启动时自动创建。默认日志文件为 `LOG_DIR/backend.log`，使用轻量滚动日志，适合短期演示部署。
-
-相对路径按 `backend/` 目录解析，例如 `../uploads` 会解析到项目根目录的 `uploads/`。
-
-`PROVIDER_SECRET_KEY` 用于加密 provider API Key。生产环境必须替换为 32 字符以上随机密钥，并在部署后保持稳定。
-
-`JWT_SECRET_KEY` 用于签发登录访问令牌。生产环境必须替换为 32 字符以上随机密钥。
-
-## Windows Server 启动
-
-默认演示部署目标是 Windows Server 2 核 2GB 轻量云服务器。后端启动命令：
-
-```powershell
-cd C:\sazj\backend
-.\venv\Scripts\activate
-uvicorn app.main:app --host 0.0.0.0 --port 8000
-```
-
-进程守护优先使用 NSSM，完整部署步骤见 `deploy/windows_server_deploy.md` 和 `deploy/windows_nssm_service.md`。
+当前阶段使用 SQLAlchemy `create_all` 自动建表。正式迁移阶段应改为 Alembic。
 
 ## 当前接口
 
@@ -70,11 +86,10 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 - `POST /api/advice/generate`
 - `POST /api/chat`
 
-## 注意
+## 注意事项
 
 - 当前识别通过用户配置的 Vision LLM API 完成，不加载本地 TensorFlow 模型。
-- 当前已持久化模型配置，Provider API Key 会加密后入库。
-- 当前已持久化识别记录，`/api/predict` 成功后返回 `record_id`。
-- 当前历史记录接口支持分页和删除；登录后优先返回当前用户记录，未登录时返回全局记录。
-- 当前模型配置已按用户隔离；登录后只操作当前用户 provider，未登录时操作全局演示 provider。
-- 当前仍未保存原图路径。
+- 当前防治建议和聊天通过用户配置的 Text LLM API 完成。
+- Provider API Key 会加密后入库。
+- 登录后模型配置和历史记录优先按当前用户隔离。
+- SQLite 适合本地开发和临时演示；正式 Windows Server 部署仍建议使用 PostgreSQL。
