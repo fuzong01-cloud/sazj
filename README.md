@@ -14,8 +14,9 @@
 - 当前问答接口：`POST /api/chat`，通过用户配置的 Text LLM API 完成。
 - 模型配置接口：`/api/model-configs`，已切换为 SQLAlchemy 数据库仓储。
 - 识别记录：`POST /api/predict` 成功后会写入 `prediction_records` 表，并返回 `record_id`。
-- 历史记录接口：`GET /api/history` 和 `GET /api/history/{id}`，当前返回全局识别记录。
-- 前端历史记录：主页面已展示最近识别记录，字段包括时间、病害、风险等级、provider 和模型名。
+- 历史记录接口：`GET /api/history`、`GET /api/history/{id}`、`DELETE /api/history/{id}`，当前操作全局识别记录。
+- 用户基础接口：`POST /api/auth/register`、`POST /api/auth/login`、`GET /api/auth/me`。
+- 前端历史记录：主页面已展示最近识别记录，点击记录可查看摘要、建议、置信度和原始模型输出。
 - 旧本地模型：`final_model.h5` 仅作为 legacy 资料，不参与运行。
 - 默认部署目标：Windows Server 轻量云服务器，2 核 CPU、2GB 内存、40GB 存储。
 
@@ -68,6 +69,8 @@ DB_POOL_RECYCLE=1800
 UPLOAD_DIR=../uploads
 LOG_DIR=../logs
 PROVIDER_SECRET_KEY=development-provider-secret-key-change-me
+JWT_SECRET_KEY=development-jwt-secret-key-change-me
+ACCESS_TOKEN_EXPIRE_MINUTES=1440
 ```
 
 当前阶段使用 SQLAlchemy `create_all` 在开发环境自动建表。后续进入正式迁移阶段时，应改为 Alembic 管理迁移。
@@ -166,19 +169,30 @@ Content-Type: application/json
 
 查询接口：
 
-- `GET /api/history?limit=20`
+- `GET /api/history?limit=20&offset=0`
 - `GET /api/history/{id}`
+- `DELETE /api/history/{id}`
 
 当前阶段还没有用户系统和图片文件持久化，因此识别记录暂未绑定用户，也不保存原图路径。用户系统完成后，历史记录接口会改为只返回当前用户的数据。
+
+## 用户系统
+
+当前已提供基础用户接口：
+
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `GET /api/auth/me`
+
+密码使用 PBKDF2 哈希保存，登录后返回 Bearer Token。当前历史记录、模型配置尚未按用户隔离，后续阶段会逐步接入当前用户上下文。
 
 ## 开发计划
 
 1. 完成模型配置 PostgreSQL 持久化。
 2. 建立 Windows Server 2 核 2GB 演示部署方案。
 3. 落地 Windows 部署运行参数、轻量日志和数据库连接池配置。
-4. 建立用户系统和权限控制。
-5. 将全局历史记录升级为用户隔离历史，并补充图片文件保存。
-6. 增加历史详情页和删除能力。
+4. 将全局历史记录升级为用户隔离历史，并补充图片文件保存。
+5. 增加前端登录注册页面和登录态管理。
+6. 将模型配置改为用户级配置。
 7. 持久化区域统计和日志。
 8. 增加知识库增强、防治建议管理、风险预警和统计看板。
 9. 清理或迁移 legacy 模型、Notebook、Colab、Kaggle 残留资料。

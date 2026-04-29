@@ -19,6 +19,7 @@
 - 后端已读取 `UPLOAD_DIR`、`LOG_DIR` 和轻量数据库连接池配置。
 - 启动时会自动创建上传目录、日志目录，并写入 `backend.log`。
 - Provider API Key 新写入和更新时会加密保存，API 响应不返回明文。
+- 当前已提供基础用户注册、登录、`/me` 接口，但业务数据尚未按用户隔离。
 
 ## v0.4.0 数据库接入状态
 
@@ -34,6 +35,7 @@
 
 - 模型配置 `model_configs`
 - 识别记录 `prediction_records`
+- 用户 `users`
 
 尚未持久化：
 
@@ -67,6 +69,10 @@
 - `POST /api/predict`
 - `GET /api/history`
 - `GET /api/history/{id}`
+- `DELETE /api/history/{id}`
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `GET /api/auth/me`
 - `POST /api/advice/generate`
 - `POST /api/chat`
 
@@ -75,8 +81,9 @@
 - 旧数据库中历史明文 API Key 需要重新保存一次配置，才能转换为加密字段。
 - 尚未接入 Alembic，开发期暂用 `create_all`。
 - 尚未实现用户系统、历史记录、区域统计和日志记录。
-- 当前已提供全局历史记录查询 API，但尚未按用户隔离，也未绑定区域。
-- 前端主页面已展示最近识别历史，字段包括时间、病害、风险等级、provider 和模型名。
+- 当前已提供全局历史记录查询、分页和删除 API，但尚未按用户隔离，也未绑定区域。
+- 用户接口已建立，历史记录、模型配置、区域统计还未接入用户归属。
+- 前端主页面已展示最近识别历史，点击记录可查看摘要、建议、置信度和原始模型输出。
 - Provider 当前按 OpenAI-compatible `chat/completions` 协议实现，后续可扩展不同厂商适配器。
 
 ## 验证命令

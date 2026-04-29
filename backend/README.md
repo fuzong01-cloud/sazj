@@ -26,6 +26,8 @@ DB_POOL_RECYCLE=1800
 UPLOAD_DIR=../uploads
 LOG_DIR=../logs
 PROVIDER_SECRET_KEY=development-provider-secret-key-change-me
+JWT_SECRET_KEY=development-jwt-secret-key-change-me
+ACCESS_TOKEN_EXPIRE_MINUTES=1440
 ```
 
 当前阶段开发环境使用 SQLAlchemy `create_all` 自动建表。后续正式迁移阶段应改为 Alembic。
@@ -35,6 +37,8 @@ PROVIDER_SECRET_KEY=development-provider-secret-key-change-me
 相对路径按 `backend/` 目录解析，例如 `../uploads` 会解析到项目根目录的 `uploads/`。
 
 `PROVIDER_SECRET_KEY` 用于加密 provider API Key。生产环境必须替换为 32 字符以上随机密钥，并在部署后保持稳定。
+
+`JWT_SECRET_KEY` 用于签发登录访问令牌。生产环境必须替换为 32 字符以上随机密钥。
 
 ## Windows Server 启动
 
@@ -51,14 +55,18 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 ## 当前接口
 
 - `GET /api/health`
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `GET /api/auth/me`
 - `GET /api/model/status`
 - `GET /api/model-configs`
 - `POST /api/model-configs`
 - `PUT /api/model-configs/{id}`
 - `DELETE /api/model-configs/{id}`
 - `POST /api/predict`
-- `GET /api/history`
+- `GET /api/history?limit=20&offset=0`
 - `GET /api/history/{id}`
+- `DELETE /api/history/{id}`
 - `POST /api/advice/generate`
 - `POST /api/chat`
 
@@ -67,4 +75,5 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 - 当前识别通过用户配置的 Vision LLM API 完成，不加载本地 TensorFlow 模型。
 - 当前已持久化模型配置，Provider API Key 会加密后入库。
 - 当前已持久化识别记录，`/api/predict` 成功后返回 `record_id`。
-- 当前历史记录接口返回全局识别记录，尚未绑定用户，也未保存原图路径。
+- 当前历史记录接口支持分页和删除，但仍返回全局识别记录，尚未绑定用户，也未保存原图路径。
+- 当前已提供基础注册登录接口，但历史记录和模型配置尚未按用户隔离。

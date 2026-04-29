@@ -3,6 +3,7 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.advice import router as advice_router
+from app.api.auth import router as auth_router
 from app.api.chat import router as chat_router
 from app.api.health import router as health_router
 from app.api.history import router as history_router
@@ -31,6 +32,7 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(health_router, prefix=settings.api_prefix)
+    app.include_router(auth_router, prefix=settings.api_prefix)
     app.include_router(model_router, prefix=settings.api_prefix)
     app.include_router(model_configs_router, prefix=settings.api_prefix)
     app.include_router(predict_router, prefix=settings.api_prefix)

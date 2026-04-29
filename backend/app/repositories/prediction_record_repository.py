@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.db.session import SessionLocal
 from app.models.prediction_record import PredictionRecord
@@ -47,3 +47,31 @@ def list_prediction_records(limit: int = 20) -> list[PredictionRecordStored]:
             .limit(safe_limit)
         ).all()
         return [_to_schema(row) for row in rows]
+
+
+def count_prediction_records() -> int:
+    with SessionLocal() as session:
+        return session.scalar(select(func.count(PredictionRecord.id))) or 0
+
+
+def list_prediction_records_page(limit: int = 20, offset: int = 0) -> list[PredictionRecordStored]:
+    safe_limit = max(1, min(limit, 100))
+    safe_offset = max(0, offset)
+    with SessionLocal() as session:
+        rows = session.scalars(
+            select(PredictionRecord)
+            .order_by(PredictionRecord.created_at.desc(), PredictionRecord.id.desc())
+            .offset(safe_offset)
+            .limit(safe_limit)
+        ).all()
+        return [_to_schema(row) for row in rows]
+
+
+def delete_prediction_record(record_id: int) -> bool:
+    with SessionLocal() as session:
+        row = session.get(PredictionRecord, record_id)
+        if row is None:
+            return False
+        session.delete(row)
+        session.commit()
+        return True

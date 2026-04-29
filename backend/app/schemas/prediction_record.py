@@ -20,3 +20,10 @@ class PredictionRecordCreate(BaseModel):
 class PredictionRecordStored(PredictionRecordCreate):
     id: int
     created_at: datetime
+
+
+class PredictionRecordPage(BaseModel):
+    items: list[PredictionRecordStored]
+    total: int
+    limit: int
+    offset: int

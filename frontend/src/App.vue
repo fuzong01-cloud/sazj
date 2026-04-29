@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { fetchHealth } from './api/health'
-import { fetchHistory } from './api/history'
+import { deleteHistoryRecord, fetchHistory, fetchHistoryRecord } from './api/history'
 import { predictImage } from './api/predict'
 
 const health = ref(null)
@@ -15,6 +15,18 @@ const predictResult = ref(null)
 const historyLoading = ref(false)
 const historyError = ref('')
 const historyRecords = ref([])
+const historyLimit = ref(10)
+const historyOffset = ref(0)
+const historyTotal = ref(0)
+const selectedHistory = ref(null)
+const historyDetailLoading = ref(false)
+const historyDetailError = ref('')
+const historyDeleteLoading = ref(false)
+
+const historyPage = computed(() => Math.floor(historyOffset.value / historyLimit.value) + 1)
+const historyPageCount = computed(() => Math.max(1, Math.ceil(historyTotal.value / historyLimit.value)))
+const canPrevHistory = computed(() => historyOffset.value > 0)
+const canNextHistory = computed(() => historyOffset.value + historyLimit.value < historyTotal.value)
 
 const serviceState = computed(() => {
   if (healthLoading.value) return '检测中'
@@ -77,12 +89,59 @@ async function loadHistory() {
   historyError.value = ''
 
   try {
-    historyRecords.value = await fetchHistory(20)
+    const page = await fetchHistory(historyLimit.value, historyOffset.value)
+    historyRecords.value = page.items || []
+    historyTotal.value = page.total || 0
+    if (selectedHistory.value) {
+      const current = historyRecords.value.find((record) => record.id === selectedHistory.value.id)
+      if (current) selectedHistory.value = { ...selectedHistory.value, ...current }
+    }
   } catch (err) {
     historyRecords.value = []
     historyError.value = err instanceof Error ? err.message : '历史记录获取失败'
   } finally {
     historyLoading.value = false
+  }
+}
+
+async function goHistoryPage(direction) {
+  const nextOffset = historyOffset.value + direction * historyLimit.value
+  historyOffset.value = Math.max(0, nextOffset)
+  await loadHistory()
+}
+
+async function selectHistory(record) {
+  selectedHistory.value = record
+  historyDetailLoading.value = true
+  historyDetailError.value = ''
+
+  try {
+    selectedHistory.value = await fetchHistoryRecord(record.id)
+  } catch (err) {
+    historyDetailError.value = err instanceof Error ? err.message : '历史详情获取失败'
+  } finally {
+    historyDetailLoading.value = false
+  }
+}
+
+async function removeSelectedHistory() {
+  if (!selectedHistory.value || historyDeleteLoading.value) return
+
+  historyDeleteLoading.value = true
+  historyDetailError.value = ''
+
+  try {
+    await deleteHistoryRecord(selectedHistory.value.id)
+    selectedHistory.value = null
+    const lastItemOnPage = historyRecords.value.length === 1
+    if (lastItemOnPage && historyOffset.value > 0) {
+      historyOffset.value = Math.max(0, historyOffset.value - historyLimit.value)
+    }
+    await loadHistory()
+  } catch (err) {
+    historyDetailError.value = err instanceof Error ? err.message : '历史记录删除失败'
+  } finally {
+    historyDeleteLoading.value = false
   }
 }
 
@@ -188,24 +247,108 @@ onMounted(() => {
 
       <p v-if="historyError" class="error-text">{{ historyError }}</p>
 
-      <div v-else-if="historyRecords.length" class="history-table" aria-label="识别历史记录">
-        <div class="history-row history-row-head">
-          <span>时间</span>
-          <span>病害</span>
-          <span>风险</span>
-          <span>Provider</span>
-          <span>模型</span>
+      <div v-else-if="historyRecords.length" class="history-layout">
+        <div class="history-table" aria-label="识别历史记录">
+          <div class="history-row history-row-head">
+            <span>时间</span>
+            <span>病害</span>
+            <span>风险</span>
+            <span>Provider</span>
+            <span>模型</span>
+          </div>
+          <button
+            v-for="record in historyRecords"
+            :key="record.id"
+            type="button"
+            class="history-row history-row-action"
+            :class="{ active: selectedHistory?.id === record.id }"
+            @click="selectHistory(record)"
+          >
+            <span>{{ formatTime(record.created_at) }}</span>
+            <strong>{{ record.disease_name }}</strong>
+            <span class="risk-pill">{{ record.risk_level }}</span>
+            <span>{{ record.provider_name }}</span>
+            <span>{{ record.model_name }}</span>
+          </button>
         </div>
-        <div v-for="record in historyRecords" :key="record.id" class="history-row">
-          <span>{{ formatTime(record.created_at) }}</span>
-          <strong>{{ record.disease_name }}</strong>
-          <span class="risk-pill">{{ record.risk_level }}</span>
-          <span>{{ record.provider_name }}</span>
-          <span>{{ record.model_name }}</span>
-        </div>
+
+        <aside class="history-detail" aria-label="历史记录详情">
+          <template v-if="selectedHistory">
+            <div class="detail-title-row">
+              <div>
+                <p class="panel-k">记录 #{{ selectedHistory.id }}</p>
+                <h3>{{ selectedHistory.disease_name }}</h3>
+              </div>
+              <span class="risk-pill">{{ selectedHistory.risk_level }}</span>
+            </div>
+            <button
+              type="button"
+              class="danger-button"
+              @click="removeSelectedHistory"
+              :disabled="historyDeleteLoading"
+            >
+              {{ historyDeleteLoading ? '删除中...' : '删除记录' }}
+            </button>
+
+            <p v-if="historyDetailError" class="error-text">{{ historyDetailError }}</p>
+            <p v-else-if="historyDetailLoading" class="muted-text">正在读取详情...</p>
+
+            <dl class="detail-grid">
+              <div>
+                <dt>识别时间</dt>
+                <dd>{{ formatTime(selectedHistory.created_at) }}</dd>
+              </div>
+              <div>
+                <dt>模型置信度</dt>
+                <dd>
+                  {{ selectedHistory.confidence_percent !== null ? `${selectedHistory.confidence_percent}%` : '未返回' }}
+                </dd>
+              </div>
+              <div>
+                <dt>Provider</dt>
+                <dd>{{ selectedHistory.provider_name }}</dd>
+              </div>
+              <div>
+                <dt>模型</dt>
+                <dd>{{ selectedHistory.model_name }}</dd>
+              </div>
+            </dl>
+
+            <section class="detail-block">
+              <h4>摘要</h4>
+              <p>{{ selectedHistory.summary }}</p>
+            </section>
+
+            <section class="detail-block">
+              <h4>建议</h4>
+              <ul v-if="selectedHistory.suggestions?.length" class="suggestion-list">
+                <li v-for="item in selectedHistory.suggestions" :key="item">{{ item }}</li>
+              </ul>
+              <p v-else class="muted-text">模型未返回建议</p>
+            </section>
+
+            <section class="detail-block">
+              <h4>原始模型输出</h4>
+              <pre>{{ selectedHistory.raw_text || '无原始输出' }}</pre>
+            </section>
+          </template>
+          <div v-else class="empty-detail">
+            <p>点击一条记录查看完整信息</p>
+          </div>
+        </aside>
       </div>
 
-      <div v-else class="empty-history">
+      <div v-if="!historyError && historyTotal" class="history-pager">
+        <button type="button" class="ghost-button" @click="goHistoryPage(-1)" :disabled="!canPrevHistory || historyLoading">
+          上一页
+        </button>
+        <span>第 {{ historyPage }} / {{ historyPageCount }} 页，共 {{ historyTotal }} 条</span>
+        <button type="button" class="ghost-button" @click="goHistoryPage(1)" :disabled="!canNextHistory || historyLoading">
+          下一页
+        </button>
+      </div>
+
+      <div v-else-if="!historyError" class="empty-history">
         <p>{{ historyLoading ? '正在读取历史记录...' : '暂无识别记录' }}</p>
       </div>
     </section>

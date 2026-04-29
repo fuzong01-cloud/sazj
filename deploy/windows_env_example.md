@@ -37,16 +37,9 @@ LOG_LEVEL=INFO
 LOG_MAX_BYTES=5242880
 LOG_BACKUP_COUNT=3
 PROVIDER_SECRET_KEY=请替换为32字符以上随机密钥
-FRONTEND_ORIGINS=http://服务器公网IP
-```
-
-## 后续阶段预留配置
-
-以下配置是后续用户认证阶段预留项。当前代码不一定全部读取，新增功能时应优先沿用这些名称。
-
-```text
-JWT_SECRET_KEY=请替换为32字节以上随机密钥
+JWT_SECRET_KEY=请替换为32字符以上随机密钥
 ACCESS_TOKEN_EXPIRE_MINUTES=1440
+FRONTEND_ORIGINS=http://服务器公网IP
 ```
 
 ## Provider API Key 加密
@@ -100,3 +93,11 @@ FRONTEND_ORIGINS=http://服务器公网IP,http://127.0.0.1:5173,http://localhost
 - API Key 不要写进 README、前端代码或截图。
 - Provider API Key 会加密后再存入 PostgreSQL。
 - 如果发现旧数据库中存在明文 provider API Key，请在当前版本启动后重新保存一次该模型配置。
+
+## 用户登录令牌
+
+`JWT_SECRET_KEY` 用于签发登录访问令牌。要求：
+
+- 生产环境必须替换默认值。
+- 建议使用 32 字符以上随机字符串。
+- 修改后，旧登录 token 会失效，用户需要重新登录。

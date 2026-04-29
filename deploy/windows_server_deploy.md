@@ -74,12 +74,16 @@ FRONTEND_ORIGINS=http://服务器公网IP
 UPLOAD_DIR=C:\sazj\uploads
 LOG_DIR=C:\sazj\logs
 PROVIDER_SECRET_KEY=请替换为32字符以上随机密钥
+JWT_SECRET_KEY=请替换为32字符以上随机密钥
+ACCESS_TOKEN_EXPIRE_MINUTES=1440
 MAX_UPLOAD_BYTES=8388608
 ```
 
 2GB 内存服务器建议保持较小数据库连接池：`DB_POOL_SIZE=2`、`DB_MAX_OVERFLOW=1`。
 
 `PROVIDER_SECRET_KEY` 用于加密模型提供商 API Key。部署后不要随意修改，否则旧配置将无法解密。
+
+`JWT_SECRET_KEY` 用于签发登录访问令牌。修改后旧 token 会失效，用户需要重新登录。
 
 ## 初始化后端
 

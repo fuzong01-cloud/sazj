@@ -1,5 +1,45 @@
 # 版本历史
 
+## v0.4.8 history paging delete and auth baseline
+
+日期：2026-04-29
+
+该版本新增历史记录分页、删除接口，并建立用户注册登录基础能力。
+
+本基线已完成：
+
+- `GET /api/history` 改为分页响应，包含 `items`、`total`、`limit`、`offset`。
+- 新增 `DELETE /api/history/{id}`。
+- 前端历史列表支持上一页、下一页和删除选中记录。
+- 新增 `users` 表。
+- 新增 `POST /api/auth/register`、`POST /api/auth/login`、`GET /api/auth/me`。
+- 密码使用 PBKDF2 哈希保存。
+- 登录返回 Bearer Token。
+
+已知限制：
+
+- 历史记录和模型配置尚未按用户隔离。
+- 前端尚未提供登录注册页面。
+- Token 使用当前项目内置的轻量 HS256 实现，后续可按需要替换为成熟认证库。
+
+## v0.4.7 frontend history detail baseline
+
+日期：2026-04-29
+
+该版本新增前端历史记录详情面板。
+
+本基线已完成：
+
+- 点击历史记录列表中的一条记录后，调用 `GET /api/history/{id}`。
+- 详情面板展示病害名称、风险等级、识别时间、置信度、provider、模型名。
+- 详情面板展示摘要、防治建议和原始模型输出。
+
+已知限制：
+
+- 当前详情面板仍使用全局历史记录。
+- 尚未提供历史删除、分页控件和独立详情路由。
+- 尚未绑定用户系统。
+
 ## v0.4.6 frontend history list baseline
 
 日期：2026-04-29
@@ -16,7 +56,7 @@
 已知限制：
 
 - 当前仍是全局历史记录。
-- 尚未提供历史详情页、删除按钮和分页控件。
+- 已在 v0.4.7 提供历史详情面板，删除按钮和分页控件尚未实现。
 - 尚未绑定用户系统。
 
 ## v0.4.5 history query API baseline
