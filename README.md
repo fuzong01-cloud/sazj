@@ -13,6 +13,7 @@
 - 当前建议接口：`POST /api/advice/generate`，通过用户配置的 Text LLM API 完成。
 - 当前问答接口：`POST /api/chat`，通过用户配置的 Text LLM API 完成。
 - 模型配置接口：`/api/model-configs`，已切换为 SQLAlchemy 数据库仓储。
+- 模型配置归属：登录后创建和调用的是当前用户自己的 Vision/Text Provider；未登录时使用全局演示 provider。
 - 识别记录：`POST /api/predict` 成功后会写入 `prediction_records` 表，并返回 `record_id`。
 - 历史记录接口：`GET /api/history`、`GET /api/history/{id}`、`DELETE /api/history/{id}`，当前操作全局识别记录。
 - 用户基础接口：`POST /api/auth/register`、`POST /api/auth/login`、`GET /api/auth/me`。
@@ -164,6 +165,8 @@ Content-Type: application/json
 
 注意：Provider API Key 会加密后存入数据库。API 响应只返回 `api_key_masked`，不会返回明文。
 
+登录后调用 `/api/model-configs` 会自动绑定当前用户。不同用户不会共用同一组 provider；未登录请求仍使用 `user_id=null` 的全局演示配置。
+
 ## 识别记录
 
 `POST /api/predict` 成功调用 VisionProvider 后，会写入 `prediction_records` 表。当前保存 provider 名称、模型名、疾病名称、风险等级、置信度、摘要、建议、原始模型文本、上传文件名、图片 Content-Type 和创建时间。
@@ -190,6 +193,7 @@ Content-Type: application/json
 
 - `/api/predict` 会把新识别记录绑定到当前用户。
 - `/api/history`、`/api/history/{id}`、`DELETE /api/history/{id}` 会优先使用当前用户上下文。
+- `/api/model-configs` 会优先使用当前用户上下文。
 - 未登录时仍保留全局历史视图，便于演示和兼容旧数据。
 
 ## 开发计划
@@ -198,8 +202,9 @@ Content-Type: application/json
 2. 建立 Windows Server 2 核 2GB 演示部署方案。
 3. 落地 Windows 部署运行参数、轻量日志和数据库连接池配置。
 4. 补充图片文件保存。
-5. 将模型配置改为用户级配置。
-6. 增加前端登录态路由保护和用户资料页。
+5. 增加前端模型配置管理页面。
+6. 补充图片文件保存。
+7. 增加前端登录态路由保护和用户资料页。
 7. 持久化区域统计和日志。
 8. 增加知识库增强、防治建议管理、风险预警和统计看板。
 9. 清理或迁移 legacy 模型、Notebook、Colab、Kaggle 残留资料。

@@ -14,6 +14,7 @@ from app.schemas.model_config import (
 def _to_schema(row: ModelConfig) -> ModelConfigStored:
     return ModelConfigStored(
         id=row.id,
+        user_id=row.user_id,
         provider_name=row.provider_name,
         provider_type=ProviderType(row.provider_type),
         base_url=row.base_url,
@@ -23,21 +24,26 @@ def _to_schema(row: ModelConfig) -> ModelConfigStored:
     )
 
 
-def list_configs() -> list[ModelConfigStored]:
+def list_configs(user_id: int | None = None) -> list[ModelConfigStored]:
     with SessionLocal() as session:
-        rows = session.scalars(select(ModelConfig).order_by(ModelConfig.id.asc())).all()
+        rows = session.scalars(
+            select(ModelConfig).where(_user_filter(user_id)).order_by(ModelConfig.id.asc())
+        ).all()
         return [_to_schema(row) for row in rows]
 
 
-def get_config(config_id: int) -> ModelConfigStored | None:
+def get_config(config_id: int, user_id: int | None = None) -> ModelConfigStored | None:
     with SessionLocal() as session:
         row = session.get(ModelConfig, config_id)
+        if row is not None and row.user_id != user_id:
+            return None
         return _to_schema(row) if row else None
 
 
-def create_config(payload: ModelConfigCreate) -> ModelConfigStored:
+def create_config(payload: ModelConfigCreate, user_id: int | None = None) -> ModelConfigStored:
     with SessionLocal() as session:
         values = payload.model_dump(mode="json")
+        values["user_id"] = user_id
         values["api_key"] = encrypt_provider_secret(values["api_key"])
         row = ModelConfig(**values)
         session.add(row)
@@ -46,10 +52,14 @@ def create_config(payload: ModelConfigCreate) -> ModelConfigStored:
         return _to_schema(row)
 
 
-def update_config(config_id: int, payload: ModelConfigUpdate) -> ModelConfigStored | None:
+def update_config(
+    config_id: int,
+    payload: ModelConfigUpdate,
+    user_id: int | None = None,
+) -> ModelConfigStored | None:
     with SessionLocal() as session:
         row = session.get(ModelConfig, config_id)
-        if row is None:
+        if row is None or row.user_id != user_id:
             return None
 
         for key, value in payload.model_dump(exclude_unset=True, mode="json").items():
@@ -62,10 +72,10 @@ def update_config(config_id: int, payload: ModelConfigUpdate) -> ModelConfigStor
         return _to_schema(row)
 
 
-def delete_config(config_id: int) -> bool:
+def delete_config(config_id: int, user_id: int | None = None) -> bool:
     with SessionLocal() as session:
         row = session.get(ModelConfig, config_id)
-        if row is None:
+        if row is None or row.user_id != user_id:
             return False
 
         session.delete(row)
@@ -73,14 +83,24 @@ def delete_config(config_id: int) -> bool:
         return True
 
 
-def get_enabled_provider(provider_type: ProviderType) -> ModelConfigStored | None:
+def get_enabled_provider(
+    provider_type: ProviderType,
+    user_id: int | None = None,
+) -> ModelConfigStored | None:
     with SessionLocal() as session:
         row = session.scalars(
             select(ModelConfig)
             .where(
+                _user_filter(user_id),
                 ModelConfig.provider_type == provider_type.value,
                 ModelConfig.enabled.is_(True),
             )
             .order_by(ModelConfig.id.asc())
         ).first()
         return _to_schema(row) if row else None
+
+
+def _user_filter(user_id: int | None):
+    if user_id is None:
+        return ModelConfig.user_id.is_(None)
+    return ModelConfig.user_id == user_id

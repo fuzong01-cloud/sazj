@@ -12,16 +12,25 @@ from app.models import user  # noqa: F401
 def create_db_and_tables() -> None:
     Base.metadata.create_all(bind=engine)
     _ensure_prediction_records_user_id()
+    _ensure_model_configs_user_id()
 
 
 def _ensure_prediction_records_user_id() -> None:
+    _ensure_nullable_integer_column("prediction_records", "user_id")
+
+
+def _ensure_model_configs_user_id() -> None:
+    _ensure_nullable_integer_column("model_configs", "user_id")
+
+
+def _ensure_nullable_integer_column(table_name: str, column_name: str) -> None:
     inspector = inspect(engine)
-    if "prediction_records" not in inspector.get_table_names():
+    if table_name not in inspector.get_table_names():
         return
 
-    columns = {column["name"] for column in inspector.get_columns("prediction_records")}
-    if "user_id" in columns:
+    columns = {column["name"] for column in inspector.get_columns(table_name)}
+    if column_name in columns:
         return
 
     with engine.begin() as connection:
-        connection.execute(text("ALTER TABLE prediction_records ADD COLUMN user_id INTEGER"))
+        connection.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} INTEGER"))

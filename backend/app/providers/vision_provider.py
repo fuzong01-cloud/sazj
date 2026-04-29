@@ -136,8 +136,8 @@ class VisionProvider:
             return {}
 
 
-def get_enabled_vision_provider() -> VisionProvider:
-    config = get_enabled_provider(ProviderType.vision)
+def get_enabled_vision_provider(user_id: int | None = None) -> VisionProvider:
+    config = get_enabled_provider(ProviderType.vision, user_id=user_id)
     if config is None:
         raise ProviderNotConfiguredError("未配置启用的视觉模型提供商，请先创建 provider_type=vision 的模型配置")
     return VisionProvider(config)

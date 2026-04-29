@@ -1,5 +1,27 @@
 # 版本历史
 
+## v0.5.0 user-scoped provider config baseline
+
+日期：2026-04-29
+
+该版本将模型配置改为用户级配置。
+
+本基线已完成：
+
+- `model_configs` 新增可选 `user_id`。
+- 登录用户创建 provider 时自动绑定当前用户。
+- 登录用户列表、查看、更新、删除 provider 时只能操作自己的配置。
+- 登录用户调用 `/api/predict` 时只使用自己的 VisionProvider。
+- 登录用户调用 `/api/advice/generate` 和 `/api/chat` 时只使用自己的 TextProvider。
+- 未登录请求仍使用 `user_id=null` 的全局演示 provider。
+- 旧表缺少 `model_configs.user_id` 时，开发期启动会自动补列。
+
+已知限制：
+
+- 前端尚未提供模型配置管理页面。
+- 全局演示 provider 仍保留，用于未登录演示流程。
+- 正式迁移阶段仍需用 Alembic 替代自动补列。
+
 ## v0.4.9 frontend auth and user-scoped history baseline
 
 日期：2026-04-29
@@ -20,7 +42,7 @@
 
 已知限制：
 
-- 模型配置仍是全局配置，尚未按用户隔离。
+- 模型配置用户隔离已在 v0.5.0 完成。
 - 上传原图尚未保存到文件系统。
 - 前端仍是单页工作台，没有独立路由和用户资料页。
 

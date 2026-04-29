@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -10,6 +10,7 @@ class ModelConfig(Base):
     __tablename__ = "model_configs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
     provider_name: Mapped[str] = mapped_column(String(80), nullable=False)
     provider_type: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
     base_url: Mapped[str] = mapped_column(Text, nullable=False)

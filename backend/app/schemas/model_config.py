@@ -30,11 +30,13 @@ class ModelConfigUpdate(BaseModel):
 
 class ModelConfigStored(ModelConfigBase):
     id: int
+    user_id: int | None = None
     api_key: str
 
 
 class ModelConfigPublic(ModelConfigBase):
     id: int
+    user_id: int | None = None
     api_key_masked: str
 
 
@@ -47,6 +49,7 @@ def mask_api_key(api_key: str) -> str:
 def to_public(config: ModelConfigStored) -> ModelConfigPublic:
     return ModelConfigPublic(
         id=config.id,
+        user_id=config.user_id,
         provider_name=config.provider_name,
         provider_type=config.provider_type,
         base_url=config.base_url,
