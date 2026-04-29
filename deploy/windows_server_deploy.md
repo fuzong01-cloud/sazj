@@ -73,10 +73,13 @@ DB_POOL_RECYCLE=1800
 FRONTEND_ORIGINS=http://服务器公网IP
 UPLOAD_DIR=C:\sazj\uploads
 LOG_DIR=C:\sazj\logs
+PROVIDER_SECRET_KEY=请替换为32字符以上随机密钥
 MAX_UPLOAD_BYTES=8388608
 ```
 
 2GB 内存服务器建议保持较小数据库连接池：`DB_POOL_SIZE=2`、`DB_MAX_OVERFLOW=1`。
+
+`PROVIDER_SECRET_KEY` 用于加密模型提供商 API Key。部署后不要随意修改，否则旧配置将无法解密。
 
 ## 初始化后端
 
@@ -214,6 +217,12 @@ API Key 配置错误：
 - 确认 `C:\sazj\uploads` 存在。
 - 确认运行后端服务的 Windows 用户对该目录有写权限。
 - 确认 `LOG_DIR` 对运行后端服务的 Windows 用户可写，否则日志文件无法创建。
+
+日志文件未生成：
+
+- 检查 `LOG_DIR` 是否存在。
+- 检查 NSSM 服务使用的 Windows 用户是否有写权限。
+- 应用会优先保证服务启动；如果文件日志无法打开，会在控制台或 NSSM stderr 日志中输出 `file logging disabled`。
 
 内存不足：
 

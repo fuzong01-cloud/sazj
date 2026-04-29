@@ -19,3 +19,5 @@ frontend/.env
 npm-debug.log*
 logs/
 uploads/
+backend/logs/
+backend/uploads/

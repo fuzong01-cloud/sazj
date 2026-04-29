@@ -1,5 +1,71 @@
 # 版本历史
 
+## v0.4.5 history query API baseline
+
+日期：2026-04-29
+
+该版本新增历史记录查询 API。
+
+本基线已完成：
+
+- 新增 `backend/app/api/history.py`。
+- 新增 `GET /api/history`，按创建时间倒序返回识别记录列表。
+- 新增 `GET /api/history/{id}`，返回单条识别记录详情。
+- `GET /api/history` 支持 `limit` 查询参数，范围为 1 到 100，默认 20。
+
+已知限制：
+
+- 当前历史记录是全局列表，尚未按用户隔离。
+- 尚未提供删除历史记录接口。
+- 尚未提供前端历史记录页面。
+
+## v0.4.4 prediction records baseline
+
+日期：2026-04-29
+
+该版本实现识别记录持久化的第一版。
+
+本基线已完成：
+
+- 新增 `backend/app/models/prediction_record.py`，定义 `prediction_records` 表。
+- 新增 `backend/app/schemas/prediction_record.py`。
+- 新增 `backend/app/repositories/prediction_record_repository.py`。
+- `/api/predict` 成功识别后会写入识别记录。
+- `PredictResponse` 新增 `record_id`，便于后续历史记录和排查。
+
+当前保存字段：
+
+- provider 名称、模型名。
+- 疾病名称、风险等级、置信度。
+- 摘要、建议、原始模型文本。
+- 上传文件名、图片 Content-Type、创建时间。
+
+已知限制：
+
+- 尚未实现用户系统，识别记录暂未绑定用户。
+- 尚未保存上传原图文件路径。
+- 已在 v0.4.5 提供全局历史记录查询 API，前端页面尚未实现。
+
+## v0.4.3 encrypted provider credentials baseline
+
+日期：2026-04-29
+
+该版本实现 Provider API Key 加密存储。
+
+本基线已完成：
+
+- 新增 `backend/app/core/crypto.py`。
+- 新增 `PROVIDER_SECRET_KEY` 配置，要求至少 32 个字符。
+- 创建或更新 `/api/model-configs` 时，`api_key` 会加密后写入数据库。
+- 读取 provider 配置给 VisionProvider / TextProvider 使用时，会在后端内存中解密。
+- API 响应继续只返回 `api_key_masked`，不返回明文。
+
+已知限制：
+
+- 历史数据库中已经存在的明文 API Key 不会自动批量迁移，需要重新保存对应模型配置。
+- `PROVIDER_SECRET_KEY` 变更后，旧的加密 API Key 无法解密，需要重新配置 provider。
+- 用户系统尚未实现，模型配置仍是全局配置。
+
 ## v0.4.2 Windows runtime settings baseline
 
 日期：2026-04-29
@@ -19,7 +85,7 @@
 
 - 上传文件保存功能尚未正式接入，当前只是目录和配置基线。
 - 日志已写入文件，但尚未接入 `system_logs` 表或管理端查看页面。
-- Provider API Key 仍未加密，下一阶段继续处理。
+- Provider API Key 加密已在 v0.4.3 完成。
 
 ## v0.4.1 Windows Server deployment plan
 

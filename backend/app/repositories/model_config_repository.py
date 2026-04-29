@@ -1,5 +1,6 @@
 from sqlalchemy import select
 
+from app.core.crypto import decrypt_provider_secret, encrypt_provider_secret
 from app.db.session import SessionLocal
 from app.models.model_config import ModelConfig
 from app.schemas.model_config import (
@@ -16,7 +17,7 @@ def _to_schema(row: ModelConfig) -> ModelConfigStored:
         provider_name=row.provider_name,
         provider_type=ProviderType(row.provider_type),
         base_url=row.base_url,
-        api_key=row.api_key,
+        api_key=decrypt_provider_secret(row.api_key),
         model_name=row.model_name,
         enabled=row.enabled,
     )
@@ -36,7 +37,9 @@ def get_config(config_id: int) -> ModelConfigStored | None:
 
 def create_config(payload: ModelConfigCreate) -> ModelConfigStored:
     with SessionLocal() as session:
-        row = ModelConfig(**payload.model_dump(mode="json"))
+        values = payload.model_dump(mode="json")
+        values["api_key"] = encrypt_provider_secret(values["api_key"])
+        row = ModelConfig(**values)
         session.add(row)
         session.commit()
         session.refresh(row)
@@ -50,6 +53,8 @@ def update_config(config_id: int, payload: ModelConfigUpdate) -> ModelConfigStor
             return None
 
         for key, value in payload.model_dump(exclude_unset=True, mode="json").items():
+            if key == "api_key":
+                value = encrypt_provider_secret(value)
             setattr(row, key, value)
 
         session.commit()

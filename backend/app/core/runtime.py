@@ -18,18 +18,21 @@ def configure_logging() -> None:
     logger.setLevel(settings.log_level.upper())
 
     if not _has_file_handler(logger, log_file):
-        file_handler = RotatingFileHandler(
-            log_file,
-            maxBytes=settings.log_max_bytes,
-            backupCount=settings.log_backup_count,
-            encoding="utf-8",
-        )
-        file_handler.setFormatter(
-            logging.Formatter(
-                "%(asctime)s %(levelname)s [%(name)s] %(message)s",
+        try:
+            file_handler = RotatingFileHandler(
+                log_file,
+                maxBytes=settings.log_max_bytes,
+                backupCount=settings.log_backup_count,
+                encoding="utf-8",
             )
-        )
-        logger.addHandler(file_handler)
+            file_handler.setFormatter(
+                logging.Formatter(
+                    "%(asctime)s %(levelname)s [%(name)s] %(message)s",
+                )
+            )
+            logger.addHandler(file_handler)
+        except OSError as exc:
+            logging.getLogger("app").warning("file logging disabled: %s", exc)
 
     logging.getLogger("app").info(
         "runtime initialized upload_dir=%s log_dir=%s",

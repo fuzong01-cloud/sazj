@@ -18,6 +18,7 @@
 - Ubuntu + systemd + Linux Nginx + Gunicorn 不再作为默认部署方案。
 - 后端已读取 `UPLOAD_DIR`、`LOG_DIR` 和轻量数据库连接池配置。
 - 启动时会自动创建上传目录、日志目录，并写入 `backend.log`。
+- Provider API Key 新写入和更新时会加密保存，API 响应不返回明文。
 
 ## v0.4.0 数据库接入状态
 
@@ -32,10 +33,10 @@
 当前已持久化：
 
 - 模型配置 `model_configs`
+- 识别记录 `prediction_records`
 
 尚未持久化：
 
-- 识别结果
 - 用户历史
 - 区域统计
 - 日志记录
@@ -64,14 +65,17 @@
 - `PUT /api/model-configs/{id}`
 - `DELETE /api/model-configs/{id}`
 - `POST /api/predict`
+- `GET /api/history`
+- `GET /api/history/{id}`
 - `POST /api/advice/generate`
 - `POST /api/chat`
 
 ## 当前限制
 
-- API Key 当前是数据库明文字段，下一阶段必须加密。
+- 旧数据库中历史明文 API Key 需要重新保存一次配置，才能转换为加密字段。
 - 尚未接入 Alembic，开发期暂用 `create_all`。
 - 尚未实现用户系统、历史记录、区域统计和日志记录。
+- 当前已提供全局历史记录查询 API，但尚未按用户隔离，也未绑定区域。
 - Provider 当前按 OpenAI-compatible `chat/completions` 协议实现，后续可扩展不同厂商适配器。
 
 ## 验证命令

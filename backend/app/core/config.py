@@ -36,6 +36,10 @@ class Settings:
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
     log_max_bytes: int = int(os.getenv("LOG_MAX_BYTES", str(5 * 1024 * 1024)))
     log_backup_count: int = int(os.getenv("LOG_BACKUP_COUNT", "3"))
+    provider_secret_key: str = os.getenv(
+        "PROVIDER_SECRET_KEY",
+        "development-provider-secret-key-change-me",
+    )
     max_upload_bytes: int = int(os.getenv("MAX_UPLOAD_BYTES", str(8 * 1024 * 1024)))
     frontend_origins: list[str] = None
 
@@ -48,9 +52,9 @@ class Settings:
         if not self.model_path.is_absolute():
             object.__setattr__(self, "model_path", (BACKEND_DIR / self.model_path).resolve())
         if not self.upload_dir.is_absolute():
-            object.__setattr__(self, "upload_dir", (REPO_ROOT / self.upload_dir).resolve())
+            object.__setattr__(self, "upload_dir", (BACKEND_DIR / self.upload_dir).resolve())
         if not self.log_dir.is_absolute():
-            object.__setattr__(self, "log_dir", (REPO_ROOT / self.log_dir).resolve())
+            object.__setattr__(self, "log_dir", (BACKEND_DIR / self.log_dir).resolve())
 
 
 settings = Settings()

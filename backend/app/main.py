@@ -1,13 +1,16 @@
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.advice import router as advice_router
 from app.api.chat import router as chat_router
 from app.api.health import router as health_router
+from app.api.history import router as history_router
 from app.api.model import router as model_router
 from app.api.model_configs import router as model_configs_router
 from app.api.predict import router as predict_router
 from app.core.config import settings
+from app.core.crypto import CryptoError
 from app.core.runtime import configure_logging
 from app.db.init_db import create_db_and_tables
 
@@ -31,8 +34,16 @@ def create_app() -> FastAPI:
     app.include_router(model_router, prefix=settings.api_prefix)
     app.include_router(model_configs_router, prefix=settings.api_prefix)
     app.include_router(predict_router, prefix=settings.api_prefix)
+    app.include_router(history_router, prefix=settings.api_prefix)
     app.include_router(advice_router, prefix=settings.api_prefix)
     app.include_router(chat_router, prefix=settings.api_prefix)
+
+    @app.exception_handler(CryptoError)
+    def crypto_error_handler(_request, exc: CryptoError) -> JSONResponse:
+        return JSONResponse(
+            status_code=500,
+            content={"ok": False, "message": str(exc)},
+        )
 
     @app.on_event("startup")
     def on_startup() -> None:

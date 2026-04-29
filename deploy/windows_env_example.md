@@ -14,6 +14,8 @@ C:\sazj\backend\.env
 
 短期演示部署可以把根目录 `.env` 复制一份到 `backend\.env`。
 
+建议 Windows Server 中的目录配置使用绝对路径。相对路径会按 `backend\` 目录解析。
+
 ## 当前可用配置
 
 ```text
@@ -34,18 +36,26 @@ LOG_DIR=C:\sazj\logs
 LOG_LEVEL=INFO
 LOG_MAX_BYTES=5242880
 LOG_BACKUP_COUNT=3
+PROVIDER_SECRET_KEY=请替换为32字符以上随机密钥
 FRONTEND_ORIGINS=http://服务器公网IP
 ```
 
 ## 后续阶段预留配置
 
-以下配置是后续安全阶段预留项。当前代码不一定全部读取，新增功能时应优先沿用这些名称。
+以下配置是后续用户认证阶段预留项。当前代码不一定全部读取，新增功能时应优先沿用这些名称。
 
 ```text
-PROVIDER_SECRET_KEY=请替换为32字节以上随机密钥
 JWT_SECRET_KEY=请替换为32字节以上随机密钥
 ACCESS_TOKEN_EXPIRE_MINUTES=1440
 ```
+
+## Provider API Key 加密
+
+`PROVIDER_SECRET_KEY` 用于加密模型提供商的 API Key / Token。要求：
+
+- 至少 32 个字符。
+- 生产环境必须替换默认值。
+- 部署后不要随意修改；修改后，数据库中已有的 provider API Key 将无法解密，需要重新配置。
 
 ## PostgreSQL 连接说明
 
@@ -88,5 +98,5 @@ FRONTEND_ORIGINS=http://服务器公网IP,http://127.0.0.1:5173,http://localhost
 
 - `.env` 不要提交到 Git。
 - API Key 不要写进 README、前端代码或截图。
-- 下一阶段会把 provider API Key 加密后再存入 PostgreSQL。
-- 当前数据库中的 provider API Key 仍是明文字段，只适合受控演示环境。
+- Provider API Key 会加密后再存入 PostgreSQL。
+- 如果发现旧数据库中存在明文 provider API Key，请在当前版本启动后重新保存一次该模型配置。

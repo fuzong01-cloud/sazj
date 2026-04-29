@@ -13,6 +13,8 @@
 - 当前建议接口：`POST /api/advice/generate`，通过用户配置的 Text LLM API 完成。
 - 当前问答接口：`POST /api/chat`，通过用户配置的 Text LLM API 完成。
 - 模型配置接口：`/api/model-configs`，已切换为 SQLAlchemy 数据库仓储。
+- 识别记录：`POST /api/predict` 成功后会写入 `prediction_records` 表，并返回 `record_id`。
+- 历史记录接口：`GET /api/history` 和 `GET /api/history/{id}`，当前返回全局识别记录。
 - 旧本地模型：`final_model.h5` 仅作为 legacy 资料，不参与运行。
 - 默认部署目标：Windows Server 轻量云服务器，2 核 CPU、2GB 内存、40GB 存储。
 
@@ -64,11 +66,14 @@ DB_POOL_TIMEOUT=30
 DB_POOL_RECYCLE=1800
 UPLOAD_DIR=../uploads
 LOG_DIR=../logs
+PROVIDER_SECRET_KEY=development-provider-secret-key-change-me
 ```
 
 当前阶段使用 SQLAlchemy `create_all` 在开发环境自动建表。后续进入正式迁移阶段时，应改为 Alembic 管理迁移。
 
 2 核 2GB Windows Server 默认采用轻量连接池：常驻连接 2 个，临时溢出连接 1 个。后端启动时会自动创建 `UPLOAD_DIR` 和 `LOG_DIR`，并在 `LOG_DIR/backend.log` 写入滚动日志。
+
+`PROVIDER_SECRET_KEY` 用于加密模型提供商 API Key。生产环境必须替换为 32 字符以上随机密钥，并在部署后保持稳定。
 
 ## Windows Server 部署
 
@@ -152,15 +157,26 @@ Content-Type: application/json
 }
 ```
 
-注意：当前 API Key 已进入数据库字段，但尚未加密。下一阶段需要实现加密存储。
+注意：Provider API Key 会加密后存入数据库。API 响应只返回 `api_key_masked`，不会返回明文。
+
+## 识别记录
+
+`POST /api/predict` 成功调用 VisionProvider 后，会写入 `prediction_records` 表。当前保存 provider 名称、模型名、疾病名称、风险等级、置信度、摘要、建议、原始模型文本、上传文件名、图片 Content-Type 和创建时间。
+
+查询接口：
+
+- `GET /api/history?limit=20`
+- `GET /api/history/{id}`
+
+当前阶段还没有用户系统和图片文件持久化，因此识别记录暂未绑定用户，也不保存原图路径。用户系统完成后，历史记录接口会改为只返回当前用户的数据。
 
 ## 开发计划
 
 1. 完成模型配置 PostgreSQL 持久化。
 2. 建立 Windows Server 2 核 2GB 演示部署方案。
 3. 落地 Windows 部署运行参数、轻量日志和数据库连接池配置。
-4. 对 API Key / Token 做加密保存。
-5. 持久化识别结果、用户历史、区域统计和日志。
-6. 建立用户系统和权限控制。
+4. 建立用户系统和权限控制。
+5. 将全局历史记录升级为用户隔离历史，并补充图片文件保存。
+6. 持久化区域统计和日志。
 7. 增加知识库增强、防治建议管理、风险预警和统计看板。
 8. 清理或迁移 legacy 模型、Notebook、Colab、Kaggle 残留资料。

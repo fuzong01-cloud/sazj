@@ -25,11 +25,16 @@ DB_POOL_TIMEOUT=30
 DB_POOL_RECYCLE=1800
 UPLOAD_DIR=../uploads
 LOG_DIR=../logs
+PROVIDER_SECRET_KEY=development-provider-secret-key-change-me
 ```
 
 当前阶段开发环境使用 SQLAlchemy `create_all` 自动建表。后续正式迁移阶段应改为 Alembic。
 
 `UPLOAD_DIR` 和 `LOG_DIR` 会在后端启动时自动创建。默认日志文件为 `LOG_DIR/backend.log`，使用轻量滚动日志，适合短期演示部署。
+
+相对路径按 `backend/` 目录解析，例如 `../uploads` 会解析到项目根目录的 `uploads/`。
+
+`PROVIDER_SECRET_KEY` 用于加密 provider API Key。生产环境必须替换为 32 字符以上随机密钥，并在部署后保持稳定。
 
 ## Windows Server 启动
 
@@ -52,10 +57,14 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 - `PUT /api/model-configs/{id}`
 - `DELETE /api/model-configs/{id}`
 - `POST /api/predict`
+- `GET /api/history`
+- `GET /api/history/{id}`
 - `POST /api/advice/generate`
 - `POST /api/chat`
 
 ## 注意
 
 - 当前识别通过用户配置的 Vision LLM API 完成，不加载本地 TensorFlow 模型。
-- 当前已持久化模型配置，但 API Key 仍为明文字段，下一阶段必须加密保存。
+- 当前已持久化模型配置，Provider API Key 会加密后入库。
+- 当前已持久化识别记录，`/api/predict` 成功后返回 `record_id`。
+- 当前历史记录接口返回全局识别记录，尚未绑定用户，也未保存原图路径。
