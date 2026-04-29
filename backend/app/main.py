@@ -10,6 +10,7 @@ from app.api.health import router as health_router
 from app.api.history import router as history_router
 from app.api.model import router as model_router
 from app.api.model_configs import router as model_configs_router
+from app.api.providers import router as providers_router
 from app.api.predict import router as predict_router
 from app.api.weather import router as weather_router
 from app.core.config import settings
@@ -37,6 +38,7 @@ def create_app() -> FastAPI:
     app.include_router(auth_router, prefix=settings.api_prefix)
     app.include_router(model_router, prefix=settings.api_prefix)
     app.include_router(model_configs_router, prefix=settings.api_prefix)
+    app.include_router(providers_router, prefix=settings.api_prefix)
     app.include_router(predict_router, prefix=settings.api_prefix)
     app.include_router(history_router, prefix=settings.api_prefix)
     app.include_router(advice_router, prefix=settings.api_prefix)

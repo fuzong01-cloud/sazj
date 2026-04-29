@@ -13,7 +13,7 @@ router = APIRouter(prefix="/chat", tags=["chat"])
 @router.post("", response_model=ChatResponse)
 async def chat(payload: ChatRequest) -> ChatResponse:
     try:
-        provider = get_enabled_text_provider()
+        provider = get_enabled_text_provider(payload.provider_id)
         user_prompt = (
             f"上下文：{payload.context or '无'}\n"
             f"用户问题：{payload.question}\n"

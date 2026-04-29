@@ -21,11 +21,12 @@ class PredictionService:
         content_type: str,
         user_id: int | None = None,
         weather: WeatherContext | None = None,
+        provider_id: int | None = None,
     ) -> PredictResponse:
         if not image_bytes:
             raise InvalidImageError("请上传一张图片")
 
-        provider = get_enabled_vision_provider()
+        provider = get_enabled_vision_provider(provider_id)
         result = await provider.predict(
             image_bytes=image_bytes,
             filename=filename,

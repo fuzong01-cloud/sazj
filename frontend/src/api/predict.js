@@ -1,9 +1,10 @@
 import { getAuthHeaders } from './auth'
 import { API_BASE_URL } from './health'
 
-export async function predictImage(file, environment = null) {
+export async function predictImage(file, environment = null, providerId = null) {
   const body = new FormData()
   body.append('file', file)
+  if (providerId) body.append('provider_id', String(providerId))
   if (environment?.latitude !== undefined && environment?.longitude !== undefined) {
     body.append('latitude', String(environment.latitude))
     body.append('longitude', String(environment.longitude))

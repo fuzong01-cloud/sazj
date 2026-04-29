@@ -40,6 +40,13 @@ class ModelConfigPublic(ModelConfigBase):
     api_key_masked: str
 
 
+class ModelConfigChoice(BaseModel):
+    id: int
+    provider_name: str
+    provider_type: ProviderType
+    model_name: str
+
+
 def mask_api_key(api_key: str) -> str:
     if len(api_key) <= 8:
         return "****"

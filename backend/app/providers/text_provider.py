@@ -2,7 +2,7 @@ from typing import Any
 
 import httpx
 
-from app.repositories.model_config_repository import get_enabled_provider
+from app.repositories.model_config_repository import get_enabled_provider, get_enabled_provider_by_id
 from app.schemas.model_config import ProviderType
 
 
@@ -55,8 +55,11 @@ class TextProvider:
         return str(content).strip()
 
 
-def get_enabled_text_provider() -> TextProvider:
-    config = get_enabled_provider(ProviderType.text, user_id=None)
+def get_enabled_text_provider(config_id: int | None = None) -> TextProvider:
+    if config_id is not None:
+        config = get_enabled_provider_by_id(config_id, ProviderType.text, user_id=None)
+    else:
+        config = get_enabled_provider(ProviderType.text, user_id=None)
     if config is None:
         raise TextProviderNotConfiguredError("平台尚未配置启用的文本模型提供商，请联系管理员在 /admin/providers 配置")
     return TextProvider(config)

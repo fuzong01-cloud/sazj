@@ -4,7 +4,7 @@ from typing import Any
 
 import httpx
 
-from app.repositories.model_config_repository import get_enabled_provider
+from app.repositories.model_config_repository import get_enabled_provider, get_enabled_provider_by_id
 from app.schemas.model_config import ProviderType
 from app.schemas.predict import PredictResponse
 from app.schemas.weather import WeatherContext
@@ -149,8 +149,11 @@ class VisionProvider:
             return {}
 
 
-def get_enabled_vision_provider() -> VisionProvider:
-    config = get_enabled_provider(ProviderType.vision, user_id=None)
+def get_enabled_vision_provider(config_id: int | None = None) -> VisionProvider:
+    if config_id is not None:
+        config = get_enabled_provider_by_id(config_id, ProviderType.vision, user_id=None)
+    else:
+        config = get_enabled_provider(ProviderType.vision, user_id=None)
     if config is None:
         raise ProviderNotConfiguredError("平台尚未配置启用的视觉模型提供商，请联系管理员在 /admin/providers 配置")
     return VisionProvider(config)

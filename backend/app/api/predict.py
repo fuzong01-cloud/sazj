@@ -19,6 +19,7 @@ async def predict_image(
     latitude: float | None = Form(default=None),
     longitude: float | None = Form(default=None),
     location_label: str | None = Form(default=None),
+    provider_id: int | None = Form(default=None),
     current_user: UserPublic | None = Depends(get_optional_current_user),
 ) -> PredictResponse:
     image_bytes = await file.read()
@@ -38,6 +39,7 @@ async def predict_image(
             content_type=file.content_type or "",
             user_id=current_user.id if current_user else None,
             weather=weather,
+            provider_id=provider_id,
         )
     except InvalidImageError as exc:
         raise HTTPException(

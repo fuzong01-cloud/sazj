@@ -100,6 +100,40 @@ def get_enabled_provider(
         return _to_schema(row) if row else None
 
 
+def list_enabled_configs(
+    provider_type: ProviderType | None = None,
+    user_id: int | None = None,
+) -> list[ModelConfigStored]:
+    filters = [_user_filter(user_id), ModelConfig.enabled.is_(True)]
+    if provider_type is not None:
+        filters.append(ModelConfig.provider_type == provider_type.value)
+
+    with SessionLocal() as session:
+        rows = session.scalars(
+            select(ModelConfig)
+            .where(*filters)
+            .order_by(ModelConfig.provider_type.asc(), ModelConfig.id.asc())
+        ).all()
+        return [_to_schema(row) for row in rows]
+
+
+def get_enabled_provider_by_id(
+    config_id: int,
+    provider_type: ProviderType,
+    user_id: int | None = None,
+) -> ModelConfigStored | None:
+    with SessionLocal() as session:
+        row = session.get(ModelConfig, config_id)
+        if (
+            row is None
+            or row.user_id != user_id
+            or row.provider_type != provider_type.value
+            or not row.enabled
+        ):
+            return None
+        return _to_schema(row)
+
+
 def _user_filter(user_id: int | None):
     if user_id is None:
         return ModelConfig.user_id.is_(None)
