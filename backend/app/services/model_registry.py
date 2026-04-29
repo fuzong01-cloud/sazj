@@ -5,19 +5,10 @@ from app.schemas.common import ModelStatusResponse
 def get_model_status() -> ModelStatusResponse:
     model_path = settings.model_path
 
-    if not model_path.exists():
-        return ModelStatusResponse(
-            ok=False,
-            model_path=str(model_path),
-            exists=False,
-            size_bytes=None,
-            message="模型文件不存在，当前后端不会加载模型。",
-        )
-
     return ModelStatusResponse(
         ok=True,
         model_path=str(model_path),
-        exists=True,
-        size_bytes=model_path.stat().st_size,
-        message="模型文件存在；当前结构基线仅检查文件状态，不执行加载或推理。",
+        exists=model_path.exists(),
+        size_bytes=model_path.stat().st_size if model_path.exists() else None,
+        message="本地 CNN 模型仅作为 legacy 资料记录，新系统预测不加载该文件。",
     )

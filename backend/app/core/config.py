@@ -21,6 +21,7 @@ class Settings:
     app_env: str = os.getenv("APP_ENV", "development")
     api_prefix: str = os.getenv("API_PREFIX", "/api")
     model_path: Path = Path(os.getenv("MODEL_PATH", str(REPO_ROOT / "final_model.h5")))
+    max_upload_bytes: int = int(os.getenv("MAX_UPLOAD_BYTES", str(8 * 1024 * 1024)))
     frontend_origins: list[str] = None
 
     def __post_init__(self) -> None:

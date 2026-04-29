@@ -129,6 +129,13 @@ h2 {
   margin-top: 16px;
 }
 
+.workbench {
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+  gap: 16px;
+  margin-top: 16px;
+}
+
 .panel {
   min-height: 220px;
   padding: 24px;
@@ -150,9 +157,82 @@ h2 {
   margin-bottom: 10px;
 }
 
+.drop-zone {
+  display: grid;
+  place-items: center;
+  min-height: 112px;
+  margin: 18px 0;
+  padding: 18px;
+  border: 1px dashed rgba(33, 75, 53, 0.42);
+  border-radius: 8px;
+  background: #fbfcf7;
+  color: #405144;
+  cursor: pointer;
+}
+
+.drop-zone input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.preview {
+  display: block;
+  width: 100%;
+  max-height: 320px;
+  object-fit: contain;
+  margin-bottom: 16px;
+  border: 1px solid rgba(33, 75, 53, 0.16);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.error-text {
+  margin: 14px 0 0;
+  color: #a74435;
+  font-weight: 700;
+}
+
+.metric {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  margin: 18px 0;
+  padding: 18px;
+  border-radius: 8px;
+  background: #edf3e9;
+}
+
+.metric strong {
+  font-size: 34px;
+  color: #214b35;
+}
+
+.prob-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.prob-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(33, 75, 53, 0.14);
+}
+
+.provider-note {
+  margin-top: 18px;
+  color: #6e7b44;
+  font-size: 13px;
+}
+
 @media (max-width: 820px) {
   .hero,
-  .grid {
+  .grid,
+  .workbench {
     grid-template-columns: 1fr;
   }
 
