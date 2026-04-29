@@ -1,17 +1,18 @@
-﻿# 薯安智检农业病害识别平台
+# 薯安智检农业病害识别平台
 
 薯安智检是一个农业病害识别项目，当前正从演示型马铃薯叶片病害识别 Demo，逐步改造成可维护、可部署、可扩展的 Web 平台。
 
-本仓库目前处于遗留基线整理阶段。当前可运行版本仍是 Flask 单体应用：加载 `final_model.h5`，渲染 `templates/index.html`，接收图片上传并返回识别结果；在配置了 OpenAI-compatible 接口环境变量时，可以生成辅助分析建议。目标架构是 Vue + JavaScript 前端、Python FastAPI 后端和 PostgreSQL 数据库。
+本仓库目前处于结构基线阶段。旧版 Flask 单体应用仍可运行：加载 `final_model.h5`，渲染 `templates/index.html`，接收图片上传并返回识别结果；新目录 `backend/` 和 `frontend/` 已建立，用于后续前后端分离改造。目标架构是 Vue + JavaScript 前端、Python FastAPI 后端和 PostgreSQL 数据库。
 
 ## 当前状态
 
-- 版本基线：`v0.0.0 legacy baseline`。
-- 当前可运行入口：`app.py`。
-- 当前页面：Flask 模板 `templates/index.html`。
-- 当前模型文件：`final_model.h5`。
+- 版本基线：`v0.1.0 structure baseline`。
+- 旧版可运行入口：`app.py`。
+- 新后端入口：`backend/app/main.py`。
+- 新前端入口：`frontend/src/main.js`。
+- 当前模型文件：`final_model.h5`，暂未迁移。
 - 当前可选外部服务：Open-Meteo 天气接口，以及通过环境变量配置的 Moonshot/OpenAI-compatible 聊天接口。
-- 尚未实现：Vue 前端、FastAPI 后端、PostgreSQL、用户系统、历史记录、区域统计、数据加密、高并发控制、日志、监控、用户自定义大模型提供商配置。
+- 尚未实现：PostgreSQL、用户系统、历史记录、区域统计、数据加密、高并发控制、日志、监控、用户自定义大模型提供商配置。
 
 ## 技术栈
 
@@ -24,6 +25,11 @@
 - Pillow
 - Requests
 - OpenAI Python SDK，仅在配置兼容接口的 API Key 和 Base URL 时使用
+
+新增结构基线：
+
+- 后端：FastAPI + Uvicorn
+- 前端：Vue + Vite + JavaScript
 
 目标技术路线：
 
@@ -38,10 +44,18 @@
 
 ```text
 .
-|-- app.py                                  # 当前 Flask 运行基线
-|-- templates/index.html                    # 当前 Flask 页面
+|-- app.py                                  # 旧版 Flask 运行基线
+|-- templates/index.html                    # 旧版 Flask 页面
 |-- final_model.h5                          # 遗留模型文件
-|-- requirements.txt                        # Flask 基线最小依赖
+|-- requirements.txt                        # 旧版 Flask 基线最小依赖
+|-- backend/                                # FastAPI 后端结构基线
+|   |-- app/
+|   |-- requirements.txt
+|   `-- README.md
+|-- frontend/                               # Vue + Vite 前端结构基线
+|   |-- src/
+|   |-- package.json
+|   `-- README.md
 |-- webapp.py                               # 遗留 Streamlit Demo，不作为当前运行基线
 |-- Procfile                                # 遗留 Streamlit 部署配置
 |-- setup.sh                                # 遗留 Streamlit 配置脚本
@@ -56,7 +70,7 @@
 `-- HISTORY.md
 ```
 
-后续建议结构，本阶段暂不创建或迁移：
+后续建议继续扩展的结构：
 
 ```text
 .
@@ -67,6 +81,7 @@
 |       |-- models/
 |       |-- schemas/
 |       |-- services/
+|       |-- repositories/
 |       `-- main.py
 |-- frontend/
 |   `-- src/
@@ -84,20 +99,11 @@
 
 ## 本地启动
 
-PowerShell：
+旧版 Flask 启动方式：
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
-python app.py
-```
-
-Linux 或 macOS：
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
 python -m pip install -r requirements.txt
 python app.py
 ```
@@ -119,14 +125,45 @@ MOONSHOT_MODEL=kimi-k2.5
 
 当 `MOONSHOT_API_KEY` 为空时，应用仍应可以启动，并使用本地兜底建议逻辑。
 
+新 FastAPI 后端启动方式：
+
+```powershell
+cd backend
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+uvicorn app.main:app --reload
+```
+
+后端启动后访问：
+
+```text
+http://127.0.0.1:8000/api/health
+http://127.0.0.1:8000/api/model/status
+http://127.0.0.1:8000/docs
+```
+
+新 Vue 前端启动方式：
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+前端启动后访问：
+
+```text
+http://127.0.0.1:5173
+```
+
 ## 开发计划
 
 1. 保留并记录当前可运行基线。
 2. 隔离 Notebook、Colab、Kaggle 和原 Demo 残留，不直接删除重要文件。
-3. 新增 FastAPI 后端骨架，提供健康检查和模型服务接口。
-4. 新增 Vue 前端骨架，通过 API 调用后端。
+3. 将旧 Flask 预测逻辑逐步迁入 FastAPI 服务层。
+4. 将旧 Flask 页面逐步迁入 Vue 前端。
 5. 接入 PostgreSQL，保存用户、识别记录、模型提供商配置、区域和日志。
 6. 分阶段实现用户系统、历史记录、区域统计、模型配置、数据加密、日志监控和轻量部署。
 
 修改遗留代码前，请先阅读 `HISTORY.md` 和 `docs/legacy_snapshot.md`。
-
