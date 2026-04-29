@@ -16,6 +16,7 @@
 - 识别记录：`POST /api/predict` 成功后会写入 `prediction_records` 表，并返回 `record_id`。
 - 历史记录接口：`GET /api/history`、`GET /api/history/{id}`、`DELETE /api/history/{id}`，当前操作全局识别记录。
 - 用户基础接口：`POST /api/auth/register`、`POST /api/auth/login`、`GET /api/auth/me`。
+- 用户上下文：前端支持登录/注册和本地 token 管理；登录后识别记录会绑定当前用户，历史记录优先返回当前用户数据。
 - 前端历史记录：主页面已展示最近识别记录，点击记录可查看摘要、建议、置信度和原始模型输出。
 - 旧本地模型：`final_model.h5` 仅作为 legacy 资料，不参与运行。
 - 默认部署目标：Windows Server 轻量云服务器，2 核 CPU、2GB 内存、40GB 存储。
@@ -185,14 +186,20 @@ Content-Type: application/json
 
 密码使用 PBKDF2 哈希保存，登录后返回 Bearer Token。当前历史记录、模型配置尚未按用户隔离，后续阶段会逐步接入当前用户上下文。
 
+前端已提供登录/注册面板。登录后：
+
+- `/api/predict` 会把新识别记录绑定到当前用户。
+- `/api/history`、`/api/history/{id}`、`DELETE /api/history/{id}` 会优先使用当前用户上下文。
+- 未登录时仍保留全局历史视图，便于演示和兼容旧数据。
+
 ## 开发计划
 
 1. 完成模型配置 PostgreSQL 持久化。
 2. 建立 Windows Server 2 核 2GB 演示部署方案。
 3. 落地 Windows 部署运行参数、轻量日志和数据库连接池配置。
-4. 将全局历史记录升级为用户隔离历史，并补充图片文件保存。
-5. 增加前端登录注册页面和登录态管理。
-6. 将模型配置改为用户级配置。
+4. 补充图片文件保存。
+5. 将模型配置改为用户级配置。
+6. 增加前端登录态路由保护和用户资料页。
 7. 持久化区域统计和日志。
 8. 增加知识库增强、防治建议管理、风险预警和统计看板。
 9. 清理或迁移 legacy 模型、Notebook、Colab、Kaggle 残留资料。

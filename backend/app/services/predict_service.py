@@ -13,7 +13,13 @@ class InvalidImageError(ValueError):
 
 
 class PredictionService:
-    async def predict(self, image_bytes: bytes, filename: str, content_type: str) -> PredictResponse:
+    async def predict(
+        self,
+        image_bytes: bytes,
+        filename: str,
+        content_type: str,
+        user_id: int | None = None,
+    ) -> PredictResponse:
         if not image_bytes:
             raise InvalidImageError("请上传一张图片")
 
@@ -25,6 +31,7 @@ class PredictionService:
         )
         record = create_prediction_record(
             PredictionRecordCreate(
+                user_id=user_id,
                 provider_name=result.provider_name,
                 model_name=result.model_name,
                 disease_name=result.disease_name,

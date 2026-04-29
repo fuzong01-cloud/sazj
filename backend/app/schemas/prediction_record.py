@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 
 
 class PredictionRecordCreate(BaseModel):
+    user_id: int | None = None
     provider_name: str = Field(min_length=1, max_length=80)
     model_name: str = Field(min_length=1, max_length=120)
     disease_name: str = Field(min_length=1, max_length=120)

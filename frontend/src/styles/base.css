@@ -143,7 +143,7 @@ h2 {
 
 .workbench {
   display: grid;
-  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+  grid-template-columns: minmax(220px, 0.75fr) minmax(0, 0.95fr) minmax(0, 1.05fr);
   gap: 16px;
   margin-top: 16px;
 }
@@ -167,6 +167,46 @@ h2 {
 .panel-k {
   color: #6e7b44;
   margin-bottom: 10px;
+}
+
+.auth-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.auth-tabs button {
+  color: #214b35;
+  background: transparent;
+}
+
+.auth-tabs button.active {
+  color: #f8fbf7;
+  background: #214b35;
+}
+
+.auth-form {
+  display: grid;
+  gap: 12px;
+}
+
+.auth-form label {
+  display: grid;
+  gap: 6px;
+  color: #405144;
+  font-weight: 700;
+}
+
+.auth-form input {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid rgba(33, 75, 53, 0.2);
+  border-radius: 6px;
+  padding: 9px 10px;
+  color: #18201b;
+  background: #fbfcf7;
+  font: inherit;
 }
 
 .drop-zone {

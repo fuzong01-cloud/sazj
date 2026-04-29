@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import { fetchMe, getAccessToken, loginUser, registerUser, setAccessToken } from './api/auth'
 import { fetchHealth } from './api/health'
 import { deleteHistoryRecord, fetchHistory, fetchHistoryRecord } from './api/history'
 import { predictImage } from './api/predict'
@@ -12,6 +13,12 @@ const previewUrl = ref('')
 const predictLoading = ref(false)
 const predictError = ref('')
 const predictResult = ref(null)
+const currentUser = ref(null)
+const authMode = ref('login')
+const authUsername = ref('')
+const authPassword = ref('')
+const authLoading = ref(false)
+const authError = ref('')
 const historyLoading = ref(false)
 const historyError = ref('')
 const historyRecords = ref([])
@@ -27,6 +34,7 @@ const historyPage = computed(() => Math.floor(historyOffset.value / historyLimit
 const historyPageCount = computed(() => Math.max(1, Math.ceil(historyTotal.value / historyLimit.value)))
 const canPrevHistory = computed(() => historyOffset.value > 0)
 const canNextHistory = computed(() => historyOffset.value + historyLimit.value < historyTotal.value)
+const authTitle = computed(() => (authMode.value === 'login' ? '用户登录' : '用户注册'))
 
 const serviceState = computed(() => {
   if (healthLoading.value) return '检测中'
@@ -82,6 +90,55 @@ async function submitPredict() {
   } finally {
     predictLoading.value = false
   }
+}
+
+async function restoreSession() {
+  if (!getAccessToken()) return
+  authLoading.value = true
+  authError.value = ''
+  try {
+    currentUser.value = await fetchMe()
+  } catch (err) {
+    setAccessToken('')
+    currentUser.value = null
+    authError.value = err instanceof Error ? err.message : '登录状态已失效'
+  } finally {
+    authLoading.value = false
+  }
+}
+
+async function submitAuth() {
+  authLoading.value = true
+  authError.value = ''
+  try {
+    const payload = {
+      username: authUsername.value.trim(),
+      password: authPassword.value,
+    }
+    const result = authMode.value === 'login' ? await loginUser(payload) : await registerUser(payload)
+    currentUser.value = result.user
+    authPassword.value = ''
+    historyOffset.value = 0
+    selectedHistory.value = null
+    await loadHistory()
+  } catch (err) {
+    authError.value = err instanceof Error ? err.message : '认证失败'
+  } finally {
+    authLoading.value = false
+  }
+}
+
+async function logout() {
+  setAccessToken('')
+  currentUser.value = null
+  selectedHistory.value = null
+  historyOffset.value = 0
+  await loadHistory()
+}
+
+function switchAuthMode(mode) {
+  authMode.value = mode
+  authError.value = ''
 }
 
 async function loadHistory() {
@@ -157,9 +214,10 @@ function formatTime(value) {
   }).format(date)
 }
 
-onMounted(() => {
+onMounted(async () => {
   checkBackend()
-  loadHistory()
+  await restoreSession()
+  await loadHistory()
 })
 </script>
 
@@ -186,6 +244,54 @@ onMounted(() => {
     </section>
 
     <section class="workbench">
+      <article class="panel auth-panel">
+        <p class="panel-k">用户身份</p>
+        <template v-if="currentUser">
+          <h2>{{ currentUser.username }}</h2>
+          <p>当前历史记录会优先显示该用户的识别记录。退出后将回到全局演示视图。</p>
+          <button type="button" class="ghost-button" @click="logout">退出登录</button>
+        </template>
+        <template v-else>
+          <div class="auth-tabs" aria-label="认证方式">
+            <button
+              type="button"
+              :class="{ active: authMode === 'login' }"
+              @click="switchAuthMode('login')"
+            >
+              登录
+            </button>
+            <button
+              type="button"
+              :class="{ active: authMode === 'register' }"
+              @click="switchAuthMode('register')"
+            >
+              注册
+            </button>
+          </div>
+          <h2>{{ authTitle }}</h2>
+          <form class="auth-form" @submit.prevent="submitAuth">
+            <label>
+              <span>用户名</span>
+              <input v-model="authUsername" autocomplete="username" placeholder="tester" required />
+            </label>
+            <label>
+              <span>密码</span>
+              <input
+                v-model="authPassword"
+                type="password"
+                :autocomplete="authMode === 'login' ? 'current-password' : 'new-password'"
+                placeholder="至少 8 位"
+                required
+              />
+            </label>
+            <button type="submit" :disabled="authLoading">
+              {{ authLoading ? '处理中...' : authTitle }}
+            </button>
+          </form>
+          <p v-if="authError" class="error-text">{{ authError }}</p>
+        </template>
+      </article>
+
       <article class="panel uploader">
         <p class="panel-k">视觉模型识别</p>
         <h2>上传叶片图片</h2>
@@ -238,7 +344,7 @@ onMounted(() => {
       <div class="history-head">
         <div>
           <p class="panel-k">识别历史</p>
-          <h2>最近识别记录</h2>
+          <h2>{{ currentUser ? '我的识别记录' : '最近识别记录' }}</h2>
         </div>
         <button type="button" class="ghost-button" @click="loadHistory" :disabled="historyLoading">
           {{ historyLoading ? '刷新中...' : '刷新' }}

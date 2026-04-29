@@ -1,4 +1,5 @@
 import { API_BASE_URL } from './health'
+import { getAuthHeaders } from './auth'
 
 export async function predictImage(file) {
   const body = new FormData()
@@ -6,6 +7,7 @@ export async function predictImage(file) {
 
   const response = await fetch(`${API_BASE_URL}/predict`, {
     method: 'POST',
+    headers: getAuthHeaders(),
     body,
   })
 

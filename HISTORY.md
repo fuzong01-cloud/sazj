@@ -1,5 +1,29 @@
 # 版本历史
 
+## v0.4.9 frontend auth and user-scoped history baseline
+
+日期：2026-04-29
+
+该版本新增前端登录/注册界面和登录态管理，并让历史记录优先使用当前用户上下文。
+
+本基线已完成：
+
+- 新增 `frontend/src/api/auth.js`。
+- 前端主页面新增登录/注册面板。
+- 前端使用 `localStorage` 保存 access token。
+- `/api/predict` 请求会在登录后携带 Bearer Token。
+- `/api/history`、`GET /api/history/{id}`、`DELETE /api/history/{id}` 会在登录后携带 Bearer Token。
+- 后端 `prediction_records` 新增可选 `user_id`。
+- 登录用户新增识别记录时会绑定当前用户。
+- 登录用户查询、查看、删除历史记录时，只操作自己的记录。
+- 未登录时保留全局历史记录视图。
+
+已知限制：
+
+- 模型配置仍是全局配置，尚未按用户隔离。
+- 上传原图尚未保存到文件系统。
+- 前端仍是单页工作台，没有独立路由和用户资料页。
+
 ## v0.4.8 history paging delete and auth baseline
 
 日期：2026-04-29

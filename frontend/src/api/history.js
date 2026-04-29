@@ -1,8 +1,11 @@
 import { API_BASE_URL } from './health'
+import { getAuthHeaders } from './auth'
 
 export async function fetchHistory(limit = 10, offset = 0) {
   const params = new URLSearchParams({ limit: String(limit), offset: String(offset) })
-  const response = await fetch(`${API_BASE_URL}/history?${params.toString()}`)
+  const response = await fetch(`${API_BASE_URL}/history?${params.toString()}`, {
+    headers: getAuthHeaders(),
+  })
   const data = await response.json().catch(() => ({}))
 
   if (!response.ok) {
@@ -14,7 +17,9 @@ export async function fetchHistory(limit = 10, offset = 0) {
 }
 
 export async function fetchHistoryRecord(id) {
-  const response = await fetch(`${API_BASE_URL}/history/${id}`)
+  const response = await fetch(`${API_BASE_URL}/history/${id}`, {
+    headers: getAuthHeaders(),
+  })
   const data = await response.json().catch(() => ({}))
 
   if (!response.ok) {
@@ -28,6 +33,7 @@ export async function fetchHistoryRecord(id) {
 export async function deleteHistoryRecord(id) {
   const response = await fetch(`${API_BASE_URL}/history/${id}`, {
     method: 'DELETE',
+    headers: getAuthHeaders(),
   })
 
   if (!response.ok) {

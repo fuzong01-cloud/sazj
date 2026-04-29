@@ -30,6 +30,12 @@ def get_current_user(authorization: str | None = Header(default=None)) -> UserPu
     return user
 
 
+def get_optional_current_user(authorization: str | None = Header(default=None)) -> UserPublic | None:
+    if not authorization:
+        return None
+    return get_current_user(authorization)
+
+
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 def register(payload: UserCreate) -> TokenResponse:
     if get_user_public_by_username(payload.username):

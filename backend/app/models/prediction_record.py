@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Float, Integer, JSON, String, Text
+from sqlalchemy import DateTime, Float, ForeignKey, Integer, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -10,6 +10,7 @@ class PredictionRecord(Base):
     __tablename__ = "prediction_records"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
     provider_name: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
     model_name: Mapped[str] = mapped_column(String(120), nullable=False)
     disease_name: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
