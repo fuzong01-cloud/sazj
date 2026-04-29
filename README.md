@@ -6,19 +6,20 @@
 
 ## 当前状态
 
-- 版本基线：`v0.5.4 backend provider admin baseline`。
+- 版本基线：`v0.5.5 provider test and assistant baseline`。
 - 当前后端入口：`backend/app/main.py`。
 - 当前前端入口：`frontend/src/main.js`。
 - 当前识别接口：`POST /api/predict`，通过平台后端统一配置的 Vision LLM API 完成。
 - 当前建议接口：`POST /api/advice/generate`，通过平台后端统一配置的 Text LLM API 完成。
 - 当前问答接口：`POST /api/chat`，通过平台后端统一配置的 Text LLM API 完成。
-- 模型配置后台：`/admin/providers`，由项目维护者配置全局 Vision/Text Provider。
+- 模型配置后台：`/admin/providers`，由项目维护者配置全局 Vision/Text Provider，并支持测试连接。
 - 模型配置 API：`/api/model-configs` 仅供管理员自动化使用，需要 `X-Admin-Token`。
 - 识别记录：`POST /api/predict` 成功后会写入 `prediction_records` 表，并返回 `record_id`。
 - 历史记录接口：`GET /api/history`、`GET /api/history/{id}`、`DELETE /api/history/{id}`，当前操作全局识别记录。
 - 用户基础接口：`POST /api/auth/register`、`POST /api/auth/login`、`GET /api/auth/me`。
 - 用户上下文：前端支持登录/注册和本地 token 管理；登录后识别记录会绑定当前用户，历史记录优先返回当前用户数据。
 - 前端历史记录：主页面已展示最近识别记录，点击记录可查看摘要、建议、置信度和原始模型输出。
+- 前端 AI 助手：主页面已提供病害问答入口，调用后端 TextProvider。
 - 旧本地模型：`final_model.h5` 仅作为 legacy 资料，不参与运行。
 - 默认部署目标：Windows Server 轻量云服务器，2 核 CPU、2GB 内存、40GB 存储。
 
@@ -155,6 +156,8 @@ http://127.0.0.1:8000/admin/providers
 
 注意：Provider API Key 会加密后存入数据库，页面不会回显明文。普通用户前端不提供 API Key、Base URL 或模型名称配置入口。
 
+VisionProvider 用于图片识别，TextProvider 用于 AI 助手和防治建议。二者可以配置为不同厂商、不同 Base URL、不同 API Key 和不同模型名。管理页中的“测试连接”按钮会验证当前 provider 的 Base URL、API Key 和模型名是否能完成基础 `chat/completions` 调用。
+
 ## 识别记录
 
 `POST /api/predict` 成功调用 VisionProvider 后，会写入 `prediction_records` 表。当前保存 provider 名称、模型名、疾病名称、风险等级、置信度、摘要、建议、原始模型文本、上传文件名、图片 Content-Type 和创建时间。
@@ -185,10 +188,9 @@ http://127.0.0.1:8000/admin/providers
 
 ## 开发计划
 
-1. 增加后端 provider 测试连接能力。
-2. 补充图片文件保存。
-3. 增加前端登录态路由保护和用户资料页。
-4. 持久化区域统计和日志。
-5. 增加知识库增强、防治建议管理、风险预警和统计看板。
-6. 按演示稳定性决定是否从 SQLite 切换 PostgreSQL。
-7. 清理或迁移 legacy 模型、Notebook、Colab、Kaggle 残留资料。
+1. 补充图片文件保存。
+2. 增加前端登录态路由保护和用户资料页。
+3. 持久化区域统计和日志。
+4. 增加知识库增强、防治建议管理、风险预警和统计看板。
+5. 按演示稳定性决定是否从 SQLite 切换 PostgreSQL。
+6. 清理或迁移 legacy 模型、Notebook、Colab、Kaggle 残留资料。

@@ -57,6 +57,8 @@ http://服务器公网IP/admin/providers
 
 该令牌只给项目维护者使用，不要发给普通用户。
 
+VisionProvider 和 TextProvider 可以分别配置不同 API。图片识别使用 VisionProvider；防治建议和前端 AI 助手使用 TextProvider。
+
 ## 登录令牌密钥
 
 `JWT_SECRET_KEY` 用于签发登录访问令牌。要求：

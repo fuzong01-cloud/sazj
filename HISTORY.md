@@ -1,5 +1,26 @@
 # 版本历史
 
+## v0.5.5 provider test and assistant baseline
+
+日期：2026-04-29
+
+该版本新增后端 Provider 测试连接按钮，并在普通前端增加 AI 助手。
+
+本基线已完成：
+
+- 新增 `backend/app/services/provider_test_service.py`。
+- `/admin/providers` 中每个已保存 provider 增加“测试连接”按钮。
+- 测试连接会验证 Base URL、API Key、模型名和 OpenAI-compatible `chat/completions` 响应格式。
+- 新增 `frontend/src/api/chat.js`。
+- 前端主页面新增 AI 助手面板，调用 `/api/chat`。
+- AI 助手使用后端 TextProvider；图片识别继续使用 VisionProvider。
+- VisionProvider 和 TextProvider 可在后端管理页面分别配置为不同 API。
+
+已知限制：
+
+- 测试连接只验证基础 `chat/completions` 连通性；视觉图片能力仍需通过图片识别接口验证。
+- 前端 AI 助手仍是单页面板，没有独立会话历史持久化。
+
 ## v0.5.4 backend provider admin baseline
 
 日期：2026-04-29

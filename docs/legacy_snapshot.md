@@ -23,7 +23,8 @@
 - 当前已提供基础用户注册、登录、`/me` 接口，但业务数据尚未按用户隔离。
 - 当前历史记录已优先使用当前用户上下文；未登录时保留全局历史视图。
 - 当前模型配置改为后端管理员维护的全局配置，普通用户前端不暴露 API Key 配置入口。
-- 后端已提供 `/admin/providers` WebUI，用 `ADMIN_WEBUI_TOKEN` 进入。
+- 后端已提供 `/admin/providers` WebUI，用 `ADMIN_WEBUI_TOKEN` 进入，并支持 provider 测试连接。
+- 前端已提供 AI 助手面板，调用后端 TextProvider。
 
 ## v0.4.0 数据库接入状态
 

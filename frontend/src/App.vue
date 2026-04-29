@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { fetchMe, getAccessToken, loginUser, registerUser, setAccessToken } from './api/auth'
+import { askAssistant } from './api/chat'
 import { fetchHealth } from './api/health'
 import { deleteHistoryRecord, fetchHistory, fetchHistoryRecord } from './api/history'
 import { predictImage } from './api/predict'
@@ -29,6 +30,10 @@ const selectedHistory = ref(null)
 const historyDetailLoading = ref(false)
 const historyDetailError = ref('')
 const historyDeleteLoading = ref(false)
+const chatQuestion = ref('')
+const chatLoading = ref(false)
+const chatError = ref('')
+const chatMessages = ref([])
 
 const historyPage = computed(() => Math.floor(historyOffset.value / historyLimit.value) + 1)
 const historyPageCount = computed(() => Math.max(1, Math.ceil(historyTotal.value / historyLimit.value)))
@@ -202,6 +207,44 @@ async function removeSelectedHistory() {
   }
 }
 
+function buildChatContext() {
+  if (!predictResult.value) return ''
+  return [
+    `最近识别病害：${predictResult.value.disease_name}`,
+    `风险等级：${predictResult.value.risk_level}`,
+    `摘要：${predictResult.value.summary}`,
+    predictResult.value.suggestions?.length ? `建议：${predictResult.value.suggestions.join('；')}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n')
+}
+
+async function submitChat() {
+  const question = chatQuestion.value.trim()
+  if (!question || chatLoading.value) return
+
+  chatMessages.value.push({ role: 'user', text: question })
+  chatQuestion.value = ''
+  chatLoading.value = true
+  chatError.value = ''
+
+  try {
+    const result = await askAssistant({
+      question,
+      context: buildChatContext(),
+    })
+    chatMessages.value.push({
+      role: 'assistant',
+      text: result.answer,
+      provider: `${result.provider_name} / ${result.model_name}`,
+    })
+  } catch (err) {
+    chatError.value = err instanceof Error ? err.message : 'AI 助手调用失败'
+  } finally {
+    chatLoading.value = false
+  }
+}
+
 function formatTime(value) {
   if (!value) return '未知时间'
   const date = new Date(value)
@@ -338,6 +381,46 @@ onMounted(async () => {
           </p>
         </template>
       </article>
+    </section>
+
+    <section class="assistant-panel">
+      <div class="assistant-head">
+        <div>
+          <p class="panel-k">AI 助手</p>
+          <h2>病害问答与防治建议</h2>
+        </div>
+        <span>由后端 TextProvider 提供</span>
+      </div>
+
+      <div class="assistant-body">
+        <div class="chat-log" aria-label="AI 助手对话记录">
+          <div v-if="!chatMessages.length" class="chat-empty">
+            <p>可以询问病害判断、防治建议、观察要点或后续管理措施。</p>
+          </div>
+          <article
+            v-for="(message, index) in chatMessages"
+            :key="`${message.role}-${index}`"
+            class="chat-message"
+            :class="message.role"
+          >
+            <p>{{ message.text }}</p>
+            <span v-if="message.provider">{{ message.provider }}</span>
+          </article>
+        </div>
+
+        <form class="chat-form" @submit.prevent="submitChat">
+          <textarea
+            v-model="chatQuestion"
+            rows="3"
+            placeholder="例如：晚疫病和早疫病在田间如何区分？"
+            :disabled="chatLoading"
+          ></textarea>
+          <button type="submit" :disabled="chatLoading || !chatQuestion.trim()">
+            {{ chatLoading ? '生成中...' : '发送问题' }}
+          </button>
+        </form>
+        <p v-if="chatError" class="error-text">{{ chatError }}</p>
+      </div>
     </section>
 
     <section class="history-panel">

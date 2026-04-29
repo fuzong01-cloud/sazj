@@ -1,5 +1,5 @@
 from html import escape
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 from fastapi import APIRouter, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -8,17 +8,23 @@ from app.core.admin_auth import verify_admin_token
 from app.repositories.model_config_repository import (
     create_config,
     delete_config,
+    get_config,
     list_configs,
     update_config,
 )
 from app.schemas.model_config import ModelConfigCreate, ModelConfigUpdate
+from app.services.provider_test_service import test_provider_config
 
 
 router = APIRouter(tags=["admin-provider-webui"])
 
 
 @router.get("/admin/providers", response_class=HTMLResponse)
-def provider_admin_page(token: str | None = None) -> str:
+def provider_admin_page(
+    token: str | None = None,
+    test_status: str | None = None,
+    test_message: str | None = None,
+) -> str:
     if not _is_valid_token(token):
         return _page(
             title="管理员登录",
@@ -39,6 +45,7 @@ def provider_admin_page(token: str | None = None) -> str:
     rows = "\n".join(_render_config_card(config, token or "") for config in configs)
     if not rows:
         rows = '<p class="empty">暂无全局模型配置。请先新增 VisionProvider 和 TextProvider。</p>'
+    notice = _render_notice(test_status, test_message)
 
     return _page(
         title="模型配置后台",
@@ -58,6 +65,7 @@ def provider_admin_page(token: str | None = None) -> str:
           </section>
           <section class="panel">
             <h2>当前全局配置</h2>
+            {notice}
             <div class="list">{rows}</div>
           </section>
         </main>
@@ -114,6 +122,20 @@ def remove_provider(
     verify_admin_token(token)
     delete_config(config_id, user_id=None)
     return RedirectResponse(url=f"/admin/providers?token={quote(token)}", status_code=303)
+
+
+@router.post("/admin/providers/test")
+def test_provider(
+    token: str = Form(...),
+    config_id: int = Form(...),
+) -> RedirectResponse:
+    verify_admin_token(token)
+    config = get_config(config_id, user_id=None)
+    if config is None:
+        return _redirect_with_test_result(token, ok=False, message="模型配置不存在。")
+
+    result = test_provider_config(config)
+    return _redirect_with_test_result(token, ok=result.ok, message=result.message)
 
 
 def _is_valid_token(token: str | None) -> bool:
@@ -181,6 +203,11 @@ def _render_config_card(config, token: str) -> str:
         <summary>编辑</summary>
         {_render_form(token, config)}
       </details>
+      <form method="post" action="/admin/providers/test" class="inline-form">
+        <input type="hidden" name="token" value="{escape(token)}">
+        <input type="hidden" name="config_id" value="{config.id}">
+        <button type="submit" class="ghost">测试连接</button>
+      </form>
       <form method="post" action="/admin/providers/delete" class="delete-form">
         <input type="hidden" name="token" value="{escape(token)}">
         <input type="hidden" name="config_id" value="{config.id}">
@@ -188,6 +215,25 @@ def _render_config_card(config, token: str) -> str:
       </form>
     </article>
     """
+
+
+def _render_notice(status: str | None, message: str | None) -> str:
+    if not status or not message:
+        return ""
+    class_name = "notice ok" if status == "ok" else "notice error"
+    title = "测试成功" if status == "ok" else "测试失败"
+    return f'<div class="{class_name}"><strong>{title}</strong><p>{escape(message)}</p></div>'
+
+
+def _redirect_with_test_result(token: str, ok: bool, message: str) -> RedirectResponse:
+    params = urlencode(
+        {
+            "token": token,
+            "test_status": "ok" if ok else "error",
+            "test_message": message,
+        }
+    )
+    return RedirectResponse(url=f"/admin/providers?{params}", status_code=303)
 
 
 def _page(title: str, body: str) -> str:
@@ -229,9 +275,13 @@ def _page(title: str, body: str) -> str:
         .badge.on {{ color: #214b35; background: #dfeedd; }}
         details {{ margin-top: 12px; }}
         summary {{ cursor: pointer; color: #214b35; font-weight: 700; }}
-        .delete-form {{ margin-top: 10px; }}
+        .inline-form, .delete-form {{ display: inline-flex; margin-top: 10px; margin-right: 8px; }}
         .danger {{ border-color: #a74435; color: #a74435; background: transparent; }}
         .empty {{ display: grid; place-items: center; min-height: 140px; border: 1px dashed rgba(33,75,53,.24); border-radius: 8px; }}
+        .notice {{ margin-bottom: 14px; padding: 12px; border-radius: 8px; }}
+        .notice p {{ margin: 6px 0 0; }}
+        .notice.ok {{ color: #214b35; background: #dfeedd; }}
+        .notice.error {{ color: #7a493e; background: #f4e4dc; }}
         code {{ color: #214b35; }}
         @media (max-width: 820px) {{
           body {{ padding: 18px; }}

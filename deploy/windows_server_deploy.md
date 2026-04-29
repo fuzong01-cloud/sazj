@@ -186,9 +186,9 @@ http://服务器公网IP/admin/providers
 - 服务器本机 `http://127.0.0.1:8000/api/health` 正常。
 - 外部浏览器 `http://服务器公网IP/` 可以打开前端页面。
 - 外部访问 `http://服务器公网IP/api/health` 返回后端健康状态。
-- 维护者可以通过 `/admin/providers` 创建 VisionProvider 和 TextProvider 配置。
+- 维护者可以通过 `/admin/providers` 创建 VisionProvider 和 TextProvider 配置，并使用“测试连接”验证 Base URL、API Key 和模型名。
 - 上传图片后可以调用外部 Vision LLM API。
-- 可以调用 Text LLM API 生成防治建议。
+- 可以调用 Text LLM API 生成防治建议和前端 AI 助手回答。
 - 重启服务器后，NSSM 管理的后端服务自动恢复。
 
 后续功能完成后再补充验证：
@@ -214,7 +214,7 @@ http://服务器公网IP/admin/providers
 
 API Key 配置错误：
 
-- `/api/model-configs` 只保存配置，不保证外部 API 一定可用。
+- `/admin/providers` 的“测试连接”只验证基础 `chat/completions` 连通性，不保证视觉图片识别一定可用。
 - 调用 `/api/predict` 或 `/api/chat` 时如果返回 502，优先检查 `base_url`、`api_key`、`model_name`。
 
 上传目录权限不足：
