@@ -1,103 +1,225 @@
 # 薯安智检农业病害识别平台
 
-薯安智检是一个面向马铃薯病虫害场景的 AI 识别、历史记录、区域统计、风险预警、知识库增强和防治建议管理平台。
-
-当前技术路线已经调整：新系统不再使用本地 CNN，不设计离线识别，也不围绕 Kaggle/PlantVillage 数据集或训练脚本继续开发。`final_model.h5`、Notebook/Colab 训练代码和 Kaggle 相关内容只作为 legacy 资料保留，用于说明旧项目来源和历史问题，不进入新架构主线。
+薯安智检是一个面向马铃薯病虫害场景的 AI 识别与防治建议平台。当前系统的核心价值不再是本地训练 CNN 模型，而是把外部大模型能力、安全的后台模型配置、用户会话历史、天气位置上下文和可部署的 WebUI 组合成一个轻量演示平台。
 
 ## 当前状态
 
-- 版本基线：`v0.5.6 weather-aware prediction baseline`。
-- 当前后端入口：`backend/app/main.py`。
-- 当前前端入口：`frontend/src/main.js`。
-- 当前识别接口：`POST /api/predict`，通过平台后端统一配置的 Vision LLM API 完成。
-- 当前建议接口：`POST /api/advice/generate`，通过平台后端统一配置的 Text LLM API 完成。
-- 当前问答接口：`POST /api/chat`，通过平台后端统一配置的 Text LLM API 完成。
-- 模型配置后台：`/admin/providers`，由项目维护者配置全局 Vision/Text Provider，并支持测试连接。
-- 模型配置 API：`/api/model-configs` 仅供管理员自动化使用，需要 `X-Admin-Token`。
-- 识别记录：`POST /api/predict` 成功后会写入 `prediction_records` 表，并返回 `record_id`。
-- 历史记录接口：`GET /api/history`、`GET /api/history/{id}`、`DELETE /api/history/{id}`，当前操作全局识别记录。
-- 用户基础接口：`POST /api/auth/register`、`POST /api/auth/login`、`GET /api/auth/me`。
-- 用户上下文：前端支持登录/注册和本地 token 管理；登录后识别记录会绑定当前用户，历史记录优先返回当前用户数据。
-- 前端历史记录：主页面已展示最近识别记录，点击记录可查看摘要、建议、置信度和原始模型输出。
-- 前端 AI 助手：主页面已提供病害问答入口，调用后端 TextProvider。
-- 定位天气：前端可获取浏览器定位，后端查询天气并判断气候带，识别时会把环境上下文传给 VisionProvider。
-- 旧本地模型：`final_model.h5` 仅作为 legacy 资料，不参与运行。
-- 默认部署目标：Windows Server 轻量云服务器，2 核 CPU、2GB 内存、40GB 存储。
+当前基线：`v0.6.0 streaming WebUI baseline`。
+
+已经确认的新方向：
+
+- 不再使用本地 CNN 作为主线。
+- 不在服务器上训练模型，也不运行本地大模型。
+- `final_model.h5`、Notebook、Colab、Kaggle/PlantVillage 相关内容只作为 legacy 资料保留。
+- 普通用户不在前端配置 API Key。
+- 平台维护者在后端管理页统一配置外部大模型 Provider。
+- 聊天、图片识别、防治建议默认走同一套通用 Provider 运行时。
+- 本地开发和一个月演示部署默认使用 SQLite。
+- 默认部署目标优先适配 Windows Server 2 核 2GB 轻量云服务器。
+
+## 已完成能力
+
+### 后端
+
+- FastAPI 后端入口：`backend/app/main.py`。
+- Python 启动入口：`start.py`。
+- 默认 SQLite 数据库：`backend/sazj.sqlite3`。
+- 自动初始化数据库表：开发阶段通过 SQLAlchemy `create_all` 完成。
+- 用户注册、登录、当前用户信息、资料修改、头像上传、修改密码。
+- 后端管理员 Provider WebUI：`/admin/providers`。
+- Provider API Key 加密存储，不向前端普通用户暴露明文。
+- 通用 OpenAI-compatible `chat/completions` 调用层。
+- Kimi / Moonshot 兼容路径：`{base_url}/chat/completions` 或 `{base_url}/v1/chat/completions`，避免 `/v1/v1` 和 `/responses`。
+- 文本聊天：`POST /api/chat`、`POST /api/chat/stream`。
+- 图片识别：`POST /api/predict`、`POST /api/predict/stream`。
+- 防治建议：`POST /api/advice/generate`。
+- 天气位置：`GET /api/weather`。
+- 网页搜索：`GET /api/search/web`，用于给模型回答补充搜索上下文。
+- 会话历史：`GET /api/conversations`、`GET /api/conversations/{id}`、`PATCH /api/conversations/{id}`、`DELETE /api/conversations/{id}`。
+- 旧识别记录接口仍保留：`GET /api/history`、`GET /api/history/{id}`、`DELETE /api/history/{id}`。
+- 流式接口已增加 SSE 反缓冲响应头，便于前端实时显示回答和推理过程。
+
+### 前端
+
+- Vue + Vite 前端入口：`frontend/src/main.js`。
+- Python 前端启动入口：`start_frontend.py`。
+- ChatGPT 风格对话页面。
+- 左侧侧边栏支持收起和展开。
+- 侧边栏展示品牌、创建新聊天、搜索聊天、历史对话、用户信息。
+- 历史对话按当前登录用户读取，支持删除和重命名。
+- 未登录时要求先登录后使用主要功能。
+- 顶部显示后端在线状态和当前可用模型。
+- 模型选择下拉框只展示 Provider 名称，不把展示文本当作真实模型 ID。
+- 输入框支持点击上传、页面拖拽上传、剪贴板粘贴图片。
+- 加号扩展菜单支持上传图片/文件、获取天气和位置、网页搜索。
+- 深度思考做成输入框内按钮，支持开启/关闭状态。
+- AI 回复支持 Markdown 渲染。
+- 推理过程支持展示、默认展开/收起策略、耗时提示和自动滚动到底部。
+- 消息下方提供复制和重新生成按钮，按钮图标来自 `frontend/public/Resource/`。
+
+### 数据与安全
+
+- 用户密码使用 PBKDF2 哈希保存。
+- 登录使用 Bearer Token。
+- Provider API Key 使用 `PROVIDER_SECRET_KEY` 加密保存。
+- 头像和上传目录保存在服务器文件系统中。
+- 日志目录通过 `LOG_DIR` 配置并自动创建。
+- 普通用户不能在前端查看或修改平台大模型 API Key。
 
 ## 技术栈
 
-- 后端：Python + FastAPI + Uvicorn
-- 数据库：本地默认 SQLite + SQLAlchemy，部署阶段可切换 PostgreSQL
-- 外部模型调用：httpx + OpenAI-compatible chat/completions
-- 前端：Vue + Vite + JavaScript
-- 部署：Windows Server + Uvicorn + SQLite 默认演示库 + Caddy/NSSM
+- 后端：Python、FastAPI、Uvicorn、SQLAlchemy
+- 默认数据库：SQLite
+- 可选数据库：PostgreSQL，当前不是默认演示路线
+- 外部模型：OpenAI-compatible `chat/completions`
+- 前端：Vue、Vite、JavaScript
+- 部署目标：Windows Server 轻量云服务器
+- 服务守护：NSSM 或 Windows 任务计划程序
+- 静态服务和反向代理：Caddy、Nginx Windows 版或 IIS
 
-## 仓库结构
+## 目录结构
 
 ```text
 .
-|-- build.py                                # Python 构建入口：安装依赖并构建前端
-|-- start.py                                # Python 启动入口：默认 SQLite 启动 FastAPI 后端
-|-- start_frontend.py                       # Python 前端开发服务启动入口
-|-- final_model.h5                          # legacy 本地 CNN 模型资料，不参与新系统运行
+|-- build.py                         # 安装依赖并构建前端
+|-- start.py                         # 启动 FastAPI 后端，默认 SQLite
+|-- start_frontend.py                # 启动 Vite 前端开发服务
+|-- final_model.h5                   # legacy 本地 CNN 模型资料，不参与新系统运行
 |-- backend/
 |   |-- app/
-|   |   |-- api/
-|   |   |-- core/
-|   |   |-- db/                             # SQLAlchemy engine/session/init
-|   |   |-- models/                         # SQLAlchemy models
-|   |   |-- providers/                      # VisionProvider / TextProvider
-|   |   |-- repositories/                   # 数据库仓储
-|   |   |-- schemas/
-|   |   `-- services/
-|   |-- requirements.txt
-|   `-- README.md
+|   |   |-- api/                     # FastAPI 路由
+|   |   |-- core/                    # 配置、安全、加密
+|   |   |-- db/                      # SQLAlchemy engine/session/init
+|   |   |-- models/                  # 数据模型
+|   |   |-- providers/               # 通用模型运行时、文本/视觉适配层
+|   |   |-- repositories/            # 数据访问层
+|   |   |-- schemas/                 # Pydantic schemas
+|   |   `-- services/                # 业务服务
+|   `-- requirements.txt
 |-- frontend/
-|-- deploy/                                 # Windows Server 部署文档
-|-- main/                                   # legacy Colab/Kaggle 训练残留
-|-- legacy/
-|-- docs/
+|   |-- public/Resource/             # 前端图标和 logo 资源
+|   `-- src/
+|-- deploy/                          # Windows Server 部署文档
+|-- docs/                            # legacy 快照与阶段说明
+|-- legacy/                          # 历史资料归档
+|-- main/                            # legacy Colab/Kaggle 训练残留
+|-- uploads/                         # 本地上传目录
+|-- logs/                            # 本地日志目录
 |-- README.md
 `-- HISTORY.md
 ```
 
-旧的根目录 `app.py`、`webapp.py`、`Procfile`、`setup.sh` 和根目录 `requirements.txt` 已清理。当前后端依赖以 `backend/requirements.txt` 为准。
+## 本地启动
 
-## 本地 SQLite 配置
+首次准备依赖和前端构建：
 
-本地开发默认使用 SQLite，不再要求先安装 PostgreSQL。默认数据库文件位于：
-
-```text
-backend/sazj.sqlite3
+```powershell
+python build.py
 ```
 
-如需显式配置，可在 `backend/.env` 中写入：
+启动后端：
+
+```powershell
+python start.py
+```
+
+启动前端开发服务：
+
+```powershell
+python start_frontend.py
+```
+
+访问地址：
+
+```text
+前端：http://127.0.0.1:5173
+后端：http://127.0.0.1:8000
+接口文档：http://127.0.0.1:8000/docs
+Provider 管理页：http://127.0.0.1:8000/admin/providers
+```
+
+## 环境变量
+
+可在 `backend/.env` 或根目录 `.env` 中配置。`backend/.env` 优先级更高。
 
 ```text
 DATABASE_URL=sqlite:///./sazj.sqlite3
 AUTO_CREATE_TABLES=true
 SQLITE_JOURNAL_MODE=OFF
+
 UPLOAD_DIR=../uploads
 LOG_DIR=../logs
+
 PROVIDER_SECRET_KEY=development-provider-secret-key-change-me
 ADMIN_WEBUI_TOKEN=development-admin-token-change-me
 JWT_SECRET_KEY=development-jwt-secret-key-change-me
 ACCESS_TOKEN_EXPIRE_MINUTES=1440
 ```
 
-当前阶段使用 SQLAlchemy `create_all` 在开发环境自动建表。后续进入正式迁移阶段时，应改为 Alembic 管理迁移。
+生产或演示服务器必须替换：
 
-`SQLITE_JOURNAL_MODE=OFF` 是当前 Windows 本地开发兼容设置，用于避开部分磁盘/同步目录环境下 SQLite journal 文件导致的 `disk I/O error`。长期部署或关键数据场景建议切换 PostgreSQL。
+- `PROVIDER_SECRET_KEY`
+- `ADMIN_WEBUI_TOKEN`
+- `JWT_SECRET_KEY`
 
-部署到 Windows Server 时仍可切换 PostgreSQL。2 核 2GB Windows Server 建议采用轻量连接池：常驻连接 2 个，临时溢出连接 1 个。后端启动时会自动创建 `UPLOAD_DIR` 和 `LOG_DIR`，并在 `LOG_DIR/backend.log` 写入滚动日志。
+这些值不要提交到 GitHub。
 
-`PROVIDER_SECRET_KEY` 用于加密模型提供商 API Key。生产环境必须替换为 32 字符以上随机密钥，并在部署后保持稳定。
+## Provider 管理
 
-`ADMIN_WEBUI_TOKEN` 用于保护后端模型配置 WebUI。生产环境必须替换为随机令牌，不要发给普通用户。
+平台维护者访问：
+
+```text
+http://127.0.0.1:8000/admin/providers
+```
+
+输入 `ADMIN_WEBUI_TOKEN` 后，可以配置平台统一使用的通用模型 Provider，包括：
+
+- Provider 名称
+- Base URL
+- API Key
+- 模型名
+- 是否启用
+- 是否支持深度思考/推理
+- 上下文长度
+- 最大输出长度
+
+普通用户只在前端选择可用 Provider，不接触 API Key、Base URL 或真实模型配置。
+
+## 主要接口
+
+```text
+GET    /api/health
+POST   /api/auth/register
+POST   /api/auth/login
+GET    /api/auth/me
+PATCH  /api/auth/me
+PUT    /api/auth/me/password
+POST   /api/auth/me/avatar
+
+POST   /api/chat
+POST   /api/chat/stream
+POST   /api/predict
+POST   /api/predict/stream
+POST   /api/advice/generate
+
+GET    /api/weather
+GET    /api/search/web
+
+GET    /api/conversations
+GET    /api/conversations/{id}
+PATCH  /api/conversations/{id}
+DELETE /api/conversations/{id}
+
+GET    /api/history
+GET    /api/history/{id}
+DELETE /api/history/{id}
+```
+
+当前前端主要使用 `conversations` 作为聊天历史；`history` 仍保留给旧识别记录和兼容场景。
 
 ## Windows Server 部署
 
-当前项目默认面向一台 Windows Server 轻量云服务器部署：
+当前默认演示目录建议：
 
 ```text
 C:\sazj\
@@ -116,96 +238,34 @@ C:\sazj\
 - [Windows Server .env 示例](deploy/windows_env_example.md)
 - [Windows Server 防火墙与公网访问说明](deploy/windows_firewall_notes.md)
 
-服务器只负责运行前端静态页面、FastAPI 后端、SQLite 演示库、上传文件存储、日志记录和外部模型 API 转发。不要在服务器上训练 CNN、运行本地大模型或执行重型推理。
+2 核 2GB 服务器只负责运行 Web 服务、SQLite 演示库、上传文件、日志和外部 API 转发。不要在服务器上训练 CNN 或运行本地大模型。
 
-## 本地启动
+## Legacy 资料说明
 
-首次构建：
+以下内容只作为历史资料，不参与新架构主线：
 
-```powershell
-python build.py
-```
+- `final_model.h5`
+- `main/` 下 Notebook、Colab、Kaggle/PlantVillage 训练残留
+- 旧 PPT、策划书、演示资料
+- 旧 Flask / Streamlit 入口已清理
 
-启动后端：
+更换数据集、寻找训练脚本、彻底割裂 Kaggle 数据集粘连不属于当前代码主线。
 
-```powershell
-python start.py
-```
+## 当前限制
 
-启动前端开发服务：
+- SQLite 适合本地开发和短期演示，不适合长期高并发生产环境。
+- 目前尚未接入 Alembic，数据库迁移仍以开发期自动建表为主。
+- 网页搜索使用轻量 HTML 搜索方式，稳定性取决于外部搜索页面可访问性。
+- 流式输出效果取决于上游模型、网络、浏览器和反向代理是否真正逐块返回数据。
+- 天气和气候带判断是轻量实现，尚未结合长期气候统计、海拔、土壤和区域病害流行数据。
+- 区域统计、风险预警、知识库增强、防治建议管理后台仍待继续建设。
 
-```powershell
-python start_frontend.py
-```
+## 下一阶段计划
 
-访问：
-
-```text
-http://127.0.0.1:8000/docs
-http://127.0.0.1:5173
-```
-
-## 后端模型配置 WebUI
-
-平台维护者访问：
-
-```text
-http://127.0.0.1:8000/admin/providers
-```
-
-输入 `ADMIN_WEBUI_TOKEN` 后，可配置平台统一使用的 VisionProvider 和 TextProvider。
-
-注意：Provider API Key 会加密后存入数据库，页面不会回显明文。普通用户前端不提供 API Key、Base URL 或模型名称配置入口。
-
-VisionProvider 用于图片识别，TextProvider 用于 AI 助手和防治建议。二者可以配置为不同厂商、不同 Base URL、不同 API Key 和不同模型名。管理页中的“测试连接”按钮会验证当前 provider 的 Base URL、API Key 和模型名是否能完成基础 `chat/completions` 调用。
-
-## 定位、天气和气候带
-
-前端主页面提供“获取定位和天气”按钮。用户授权浏览器定位后，前端只把经纬度传给后端：
-
-```text
-GET /api/weather?latitude=31.2&longitude=121.5
-```
-
-后端使用 Open-Meteo Forecast API 查询当前天气，并按纬度粗分气候带：热带、亚热带、温带、高纬/寒温带。
-
-上传图片识别时，前端会把经纬度一并提交给 `/api/predict`。后端重新获取天气上下文后再调用 VisionProvider，让大模型结合图片、天气、湿度、降水、气候带等信息输出更专业的防治建议。
-
-## 识别记录
-
-`POST /api/predict` 成功调用 VisionProvider 后，会写入 `prediction_records` 表。当前保存 provider 名称、模型名、疾病名称、风险等级、置信度、摘要、建议、原始模型文本、上传文件名、图片 Content-Type 和创建时间。
-
-查询接口：
-
-- `GET /api/history?limit=20&offset=0`
-- `GET /api/history/{id}`
-- `DELETE /api/history/{id}`
-- `GET /api/weather?latitude=...&longitude=...`
-
-当前阶段还没有用户系统和图片文件持久化，因此识别记录暂未绑定用户，也不保存原图路径。用户系统完成后，历史记录接口会改为只返回当前用户的数据。
-
-## 用户系统
-
-当前已提供基础用户接口：
-
-- `POST /api/auth/register`
-- `POST /api/auth/login`
-- `GET /api/auth/me`
-
-密码使用 PBKDF2 哈希保存，登录后返回 Bearer Token。当前历史记录、模型配置尚未按用户隔离，后续阶段会逐步接入当前用户上下文。
-
-前端已提供登录/注册面板。登录后：
-
-- `/api/predict` 会把新识别记录绑定到当前用户。
-- `/api/history`、`/api/history/{id}`、`DELETE /api/history/{id}` 会优先使用当前用户上下文。
-- 未登录时仍保留全局历史视图，便于演示和兼容旧数据。
-
-## 开发计划
-
-1. 补充图片文件保存。
-2. 将天气上下文保存到识别历史。
-3. 增加前端登录态路由保护和用户资料页。
-4. 持久化区域统计和日志。
-5. 增加知识库增强、防治建议管理、风险预警和统计看板。
-6. 按演示稳定性决定是否从 SQLite 切换 PostgreSQL。
-7. 清理或迁移 legacy 模型、Notebook、Colab、Kaggle 残留资料。
+1. 稳定 WebUI 流式输出和深度思考体验。
+2. 完善会话重试、复制、错误回显和模型过载提示。
+3. 增加区域统计和风险预警数据表。
+4. 建立防治建议管理和知识库增强接口。
+5. 补充系统日志入库和管理端查看页面。
+6. 为 Windows Server 演示部署补充一键检查脚本。
+7. 在需要更高并发或长期运行时，再设计 SQLite 到 PostgreSQL 的迁移方案。
