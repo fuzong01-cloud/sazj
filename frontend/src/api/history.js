@@ -42,3 +42,22 @@ export async function deleteHistoryRecord(id) {
     throw new Error(message)
   }
 }
+
+export async function renameHistoryRecord(id, title) {
+  const response = await fetch(`${API_BASE_URL}/conversations/${id}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify({ title }),
+  })
+  const data = await response.json().catch(() => ({}))
+
+  if (!response.ok) {
+    const message = data?.detail?.message || data?.detail || data?.message || `历史记录重命名失败：HTTP ${response.status}`
+    throw new Error(message)
+  }
+
+  return data
+}

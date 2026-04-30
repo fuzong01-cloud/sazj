@@ -101,6 +101,18 @@ def delete_conversation(conversation_id: int, user_id: int) -> bool:
         return True
 
 
+def rename_conversation(conversation_id: int, user_id: int, title: str) -> ConversationStored | None:
+    with SessionLocal() as session:
+        row = session.get(Conversation, conversation_id)
+        if row is None or row.user_id != user_id:
+            return None
+        row.title = _normalize_title(title)
+        row.updated_at = datetime.now(timezone.utc)
+        session.commit()
+        session.refresh(row)
+        return _conversation_to_schema(row)
+
+
 def _conversation_to_schema(row: Conversation) -> ConversationStored:
     return ConversationStored(
         id=row.id,

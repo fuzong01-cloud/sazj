@@ -8,6 +8,7 @@ export async function predictImage(
   conversationId = null,
   prompt = '',
   deepThinking = false,
+  webSearch = false,
 ) {
   const body = new FormData()
   body.append('file', file)
@@ -15,6 +16,7 @@ export async function predictImage(
   if (conversationId) body.append('conversation_id', String(conversationId))
   if (prompt) body.append('prompt', prompt)
   body.append('deep_thinking', deepThinking ? 'true' : 'false')
+  body.append('web_search', webSearch ? 'true' : 'false')
   if (environment?.latitude !== undefined && environment?.longitude !== undefined) {
     body.append('latitude', String(environment.latitude))
     body.append('longitude', String(environment.longitude))
@@ -46,6 +48,7 @@ export async function streamPredictImage(
   conversationId = null,
   prompt = '',
   deepThinking = false,
+  webSearch = false,
   handlers = {},
 ) {
   const body = new FormData()
@@ -54,6 +57,7 @@ export async function streamPredictImage(
   if (conversationId) body.append('conversation_id', String(conversationId))
   if (prompt) body.append('prompt', prompt)
   body.append('deep_thinking', deepThinking ? 'true' : 'false')
+  body.append('web_search', webSearch ? 'true' : 'false')
   if (environment?.latitude !== undefined && environment?.longitude !== undefined) {
     body.append('latitude', String(environment.latitude))
     body.append('longitude', String(environment.longitude))

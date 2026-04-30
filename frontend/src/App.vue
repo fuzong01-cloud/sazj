@@ -12,10 +12,17 @@ import {
 } from './api/auth'
 import { streamAssistant } from './api/chat'
 import { API_BASE_URL, fetchHealth } from './api/health'
-import { deleteHistoryRecord, fetchHistory, fetchHistoryRecord } from './api/history'
+import { deleteHistoryRecord, fetchHistory, fetchHistoryRecord, renameHistoryRecord } from './api/history'
 import { streamPredictImage } from './api/predict'
 import { fetchEnabledProviders } from './api/providers'
 import { fetchWeather } from './api/weather'
+
+const toolIcons = {
+  deepThink: '/deepthink.png',
+  weather: '/weather.png',
+  upload: '/link.png',
+  webSearch: '/websearch.png',
+}
 
 const health = ref(null)
 const healthLoading = ref(false)
@@ -52,6 +59,7 @@ const selectedHistory = ref(null)
 const historyDetailLoading = ref(false)
 const historyDetailError = ref('')
 const historyDeleteLoading = ref(false)
+const activeHistoryMenuId = ref(null)
 const searchOpen = ref(false)
 const searchKeyword = ref('')
 
@@ -75,6 +83,7 @@ let dragDepth = 0
 const locationLoading = ref(false)
 const locationError = ref('')
 const weatherContext = ref(null)
+const webSearchEnabled = ref(false)
 
 const plusMenuOpen = ref(false)
 const sidebarCollapsed = ref(false)
@@ -374,17 +383,14 @@ async function selectHistory(record) {
           role: item.role,
           type: 'prediction',
           result: payload,
-          provider: `${payload.provider_name} / ${payload.model_name}`,
+          provider: payload.provider_name || '',
         }
       }
       return {
         role: item.role,
         text: item.content,
         reasoning: payload.reasoning_content || '',
-        provider:
-          item.provider_name && item.model_name
-            ? `${item.provider_name} / ${item.model_name}`
-            : '',
+        provider: item.provider_name || '',
       }
     })
   } catch (err) {
@@ -418,8 +424,69 @@ async function removeSelectedHistory() {
   }
 }
 
+function toggleHistoryMenu(recordId) {
+  activeHistoryMenuId.value = activeHistoryMenuId.value === recordId ? null : recordId
+}
+
+async function removeHistoryByRecord(record) {
+  if (!record || historyDeleteLoading.value) return
+  historyDeleteLoading.value = true
+  historyDetailError.value = ''
+  activeHistoryMenuId.value = null
+
+  try {
+    await deleteHistoryRecord(record.id)
+    if (currentConversationId.value === record.id) {
+      currentConversationId.value = null
+      messages.value = []
+    }
+    if (selectedHistory.value?.id === record.id) {
+      selectedHistory.value = null
+    }
+    if (historyRecords.value.length === 1 && historyOffset.value > 0) {
+      historyOffset.value = Math.max(0, historyOffset.value - historyLimit.value)
+    }
+    await loadHistory()
+  } catch (err) {
+    historyError.value = err instanceof Error ? err.message : '历史记录删除失败'
+  } finally {
+    historyDeleteLoading.value = false
+  }
+}
+
+async function renameHistoryByRecord(record) {
+  if (!record) return
+  activeHistoryMenuId.value = null
+  const nextTitle = window.prompt('重命名会话', record.title || '')
+  if (nextTitle === null) return
+  const normalized = nextTitle.trim()
+  if (!normalized || normalized === record.title) return
+
+  try {
+    const updated = await renameHistoryRecord(record.id, normalized)
+    historyRecords.value = historyRecords.value.map((item) => (item.id === updated.id ? updated : item))
+    if (selectedHistory.value?.id === updated.id) {
+      selectedHistory.value = { ...selectedHistory.value, title: updated.title, updated_at: updated.updated_at }
+    }
+  } catch (err) {
+    historyError.value = err instanceof Error ? err.message : '历史记录重命名失败'
+  }
+}
+
 function closeFloatingPanels() {
   plusMenuOpen.value = false
+  activeHistoryMenuId.value = null
+}
+
+function enableWebSearch() {
+  if (!requireLogin()) return
+  webSearchEnabled.value = true
+  plusMenuOpen.value = false
+}
+
+function clearWeatherContext() {
+  weatherContext.value = null
+  locationError.value = ''
 }
 
 function triggerFileUpload() {
@@ -642,11 +709,12 @@ async function submitTextMessage(text) {
         provider_id: selectedProviderId.value ? Number(selectedProviderId.value) : null,
         conversation_id: currentConversationId.value,
         deep_thinking: deepThinking.value,
+        web_search: webSearchEnabled.value,
       },
       {
         onMeta(event) {
           currentConversationId.value = event.conversation_id || currentConversationId.value
-          assistantMessage.provider = `${event.provider_name} / ${event.model_name}`
+          assistantMessage.provider = event.provider_name || ''
         },
         onReasoning(chunk) {
           assistantMessage.reasoning += chunk
@@ -704,7 +772,7 @@ async function submitImageMessage(text, imageAttachment) {
       suggestions: [],
       reasoning_content: '',
     },
-    provider: activeProvider.value ? `${activeProvider.value.provider_name} / ${activeProvider.value.model_name}` : '',
+    provider: activeProvider.value?.provider_name || '',
   }
   messages.value.push(assistantMessage)
 
@@ -716,10 +784,11 @@ async function submitImageMessage(text, imageAttachment) {
       currentConversationId.value,
       prompt,
       deepThinking.value,
+      webSearchEnabled.value,
       {
         onMeta(event) {
           currentConversationId.value = event.conversation_id || currentConversationId.value
-          assistantMessage.provider = `${event.provider_name} / ${event.model_name}`
+          assistantMessage.provider = event.provider_name || ''
           assistantMessage.result.provider_name = event.provider_name
           assistantMessage.result.model_name = event.model_name
         },
@@ -733,7 +802,7 @@ async function submitImageMessage(text, imageAttachment) {
         },
         onResult(result) {
           assistantMessage.result = result
-          assistantMessage.provider = `${result.provider_name} / ${result.model_name}`
+          assistantMessage.provider = result.provider_name || ''
           predictResult.value = result
           if (result.weather) weatherContext.value = result.weather
         },
@@ -850,6 +919,155 @@ function predictionContent(result) {
   return result?.content || result?.raw_text || result?.summary || '模型未返回有效内容'
 }
 
+function messageCopyText(message) {
+  if (message.type === 'prediction') return predictionContent(message.result)
+  return message.text || ''
+}
+
+async function copyMessage(message) {
+  const text = messageCopyText(message)
+  if (!text) return
+  await navigator.clipboard?.writeText(text)
+}
+
+function previousUserMessage(index) {
+  for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
+    if (messages.value[cursor]?.role === 'user') return messages.value[cursor]
+  }
+  return null
+}
+
+async function retryMessage(index) {
+  if (isBusy.value) return
+  const source = previousUserMessage(index)
+  if (!source?.text) return
+
+  const imageAttachment = source.files?.find((item) => item.file?.type?.startsWith('image/'))
+  messages.value.splice(index, 1)
+  if (imageAttachment) {
+    await regenerateImageAnswer(index, source.text, imageAttachment)
+    return
+  }
+  await regenerateTextAnswer(index, source.text, source.files || [])
+}
+
+async function regenerateTextAnswer(index, text, files = []) {
+  const assistantMessage = {
+    role: 'assistant',
+    text: '',
+    reasoning: '',
+    provider: '',
+  }
+  messages.value.splice(index, 0, assistantMessage)
+  chatLoading.value = true
+  chatError.value = ''
+
+  try {
+    await streamAssistant(
+      {
+        question: text,
+        context: buildChatContext(files),
+        provider_id: selectedProviderId.value ? Number(selectedProviderId.value) : null,
+        conversation_id: currentConversationId.value,
+        deep_thinking: deepThinking.value,
+        web_search: webSearchEnabled.value,
+      },
+      {
+        onMeta(event) {
+          currentConversationId.value = event.conversation_id || currentConversationId.value
+          assistantMessage.provider = event.provider_name || ''
+        },
+        onReasoning(chunk) {
+          assistantMessage.reasoning += chunk
+        },
+        onContent(chunk) {
+          assistantMessage.text += chunk
+        },
+        onDone(event) {
+          currentConversationId.value = event.conversation_id || currentConversationId.value
+        },
+      },
+    )
+    if (!assistantMessage.text && assistantMessage.reasoning) {
+      assistantMessage.text = '模型已返回推理过程，但尚未生成最终答案。请增大后台输出长度、关闭深度思考，或稍后重试。'
+    }
+    if (!assistantMessage.text) assistantMessage.text = '模型未返回有效内容'
+    await loadHistory()
+  } catch (err) {
+    if (err?.conversationId) currentConversationId.value = err.conversationId
+    assistantMessage.text = normalizeModelError(err instanceof Error ? err.message : 'AI 助手调用失败')
+    await loadHistory()
+  } finally {
+    chatLoading.value = false
+  }
+}
+
+async function regenerateImageAnswer(index, text, imageAttachment) {
+  const assistantMessage = {
+    role: 'assistant',
+    type: 'prediction',
+    result: {
+      provider_name: activeProvider.value?.provider_name || '',
+      model_name: activeProvider.value?.model_name || '',
+      disease_name: '模型回复',
+      risk_level: '识别中',
+      summary: '',
+      content: '',
+      raw_text: '',
+      suggestions: [],
+      reasoning_content: '',
+    },
+    provider: activeProvider.value?.provider_name || '',
+  }
+  messages.value.splice(index, 0, assistantMessage)
+  predictLoading.value = true
+  predictError.value = ''
+
+  try {
+    await streamPredictImage(
+      imageAttachment.file,
+      weatherContext.value,
+      selectedProviderId.value ? Number(selectedProviderId.value) : null,
+      currentConversationId.value,
+      text,
+      deepThinking.value,
+      webSearchEnabled.value,
+      {
+        onMeta(event) {
+          currentConversationId.value = event.conversation_id || currentConversationId.value
+          assistantMessage.provider = event.provider_name || ''
+          assistantMessage.result.provider_name = event.provider_name
+          assistantMessage.result.model_name = event.model_name
+        },
+        onReasoning(chunk) {
+          assistantMessage.result.reasoning_content += chunk
+        },
+        onContent(chunk) {
+          assistantMessage.result.content += chunk
+          assistantMessage.result.raw_text = assistantMessage.result.content
+          assistantMessage.result.summary = assistantMessage.result.content
+        },
+        onResult(result) {
+          assistantMessage.result = result
+          assistantMessage.provider = result.provider_name || ''
+          predictResult.value = result
+        },
+        onDone(event) {
+          currentConversationId.value = event.conversation_id || currentConversationId.value
+        },
+      },
+    )
+    await loadHistory()
+  } catch (err) {
+    if (err?.conversationId) currentConversationId.value = err.conversationId
+    assistantMessage.type = ''
+    assistantMessage.text = normalizeModelError(err instanceof Error ? err.message : '图片识别失败')
+    await loadHistory()
+  } finally {
+    predictLoading.value = false
+  }
+}
+
 function formatTime(value) {
   if (!value) return '未知时间'
   const date = new Date(value)
@@ -945,18 +1163,31 @@ onMounted(async () => {
 
         <p v-if="historyError && !sidebarCollapsed" class="error-text">{{ historyError }}</p>
         <div v-else class="history-list">
-          <button
+          <div
             v-for="record in filteredHistoryRecords"
             :key="record.id"
-            type="button"
             class="history-item"
             :class="{ active: selectedHistory?.id === record.id }"
-            @click="selectHistory(record)"
           >
-            <span>{{ formatTime(record.updated_at || record.created_at) }}</span>
-            <strong>{{ record.title }}</strong>
-            <small>会话记录</small>
-          </button>
+            <button type="button" class="history-main" @click="selectHistory(record)">
+              <span>{{ formatTime(record.updated_at || record.created_at) }}</span>
+              <strong>{{ record.title }}</strong>
+              <small>会话记录</small>
+            </button>
+            <button
+              v-if="!sidebarCollapsed"
+              type="button"
+              class="history-more"
+              title="更多操作"
+              @click.stop="toggleHistoryMenu(record.id)"
+            >
+              ···
+            </button>
+            <div v-if="activeHistoryMenuId === record.id && !sidebarCollapsed" class="history-menu" @click.stop>
+              <button type="button" @click="renameHistoryByRecord(record)">重命名</button>
+              <button type="button" class="danger-text" @click="removeHistoryByRecord(record)">删除</button>
+            </div>
+          </div>
           <p v-if="!filteredHistoryRecords.length && !sidebarCollapsed" class="empty-text">
             {{ historyLoading ? '正在读取历史...' : '暂无历史记录' }}
           </p>
@@ -989,7 +1220,7 @@ onMounted(async () => {
             <select v-model="selectedProviderId">
               <option value="" disabled>请选择模型</option>
               <option v-for="provider in modelProviders" :key="provider.id" :value="String(provider.id)">
-                {{ provider.provider_name }} / {{ provider.model_name }}{{ provider.supports_reasoning ? ' · 深度' : ' · 快速' }}
+                {{ provider.provider_name }}
               </option>
             </select>
           </label>
@@ -1007,40 +1238,8 @@ onMounted(async () => {
       <div class="message-scroll">
         <p v-if="providerError" class="error-text inline-error">{{ providerError }}</p>
 
-        <section v-if="selectedHistory" class="history-detail-card">
-          <div class="detail-head">
-            <div>
-              <span>会话 #{{ selectedHistory.id }}</span>
-              <h2>{{ selectedHistory.title }}</h2>
-            </div>
-            <strong>{{ selectedHistory.messages?.length || 0 }} 条消息</strong>
-          </div>
-          <p v-if="historyDetailError" class="error-text">{{ historyDetailError }}</p>
-          <p v-else-if="historyDetailLoading" class="empty-text">正在读取详情...</p>
-          <template v-else>
-            <dl class="detail-grid">
-              <div>
-                <dt>创建时间</dt>
-                <dd>{{ formatTime(selectedHistory.created_at) }}</dd>
-              </div>
-              <div>
-                <dt>更新时间</dt>
-                <dd>{{ formatTime(selectedHistory.updated_at) }}</dd>
-              </div>
-              <div>
-                <dt>当前会话</dt>
-                <dd>{{ currentConversationId === selectedHistory.id ? '已载入' : '未载入' }}</dd>
-              </div>
-              <div>
-                <dt>归属</dt>
-                <dd>{{ currentUser?.username || '未知用户' }}</dd>
-              </div>
-            </dl>
-            <button type="button" class="danger-button" @click="removeSelectedHistory" :disabled="historyDeleteLoading">
-              {{ historyDeleteLoading ? '删除中...' : '删除这个会话' }}
-            </button>
-          </template>
-        </section>
+        <p v-if="historyDetailError" class="error-text inline-error">{{ historyDetailError }}</p>
+        <p v-else-if="historyDetailLoading" class="empty-text inline-error">正在读取详情...</p>
 
         <section v-if="!messages.length && !selectedHistory" class="welcome-panel">
           <img src="/logo.png" alt="薯安智检" />
@@ -1052,7 +1251,6 @@ onMounted(async () => {
         </section>
 
         <article v-for="(message, index) in messages" :key="index" class="message" :class="message.role">
-          <div class="avatar">{{ message.role === 'user' ? '你' : 'AI' }}</div>
           <div class="message-content">
             <div v-if="message.text" class="markdown-body" v-html="renderMarkdown(message.text)"></div>
             <details v-if="message.reasoning" class="reasoning-block">
@@ -1086,6 +1284,10 @@ onMounted(async () => {
               </div>
             </template>
             <small v-else-if="message.provider">{{ message.provider }}</small>
+            <div class="message-actions">
+              <button type="button" @click="copyMessage(message)">复制</button>
+              <button v-if="message.role === 'assistant'" type="button" :disabled="isBusy" @click="retryMessage(index)">重试</button>
+            </div>
           </div>
         </article>
 
@@ -1094,7 +1296,6 @@ onMounted(async () => {
         <p v-if="attachmentError" class="error-text inline-error">{{ attachmentError }}</p>
         <p v-if="locationError" class="error-text inline-error">{{ locationError }}</p>
         <article v-if="isBusy" class="message assistant status-message">
-          <div class="avatar">AI</div>
           <div class="message-content">
             <p>{{ predictLoading ? '正在调用 Vision LLM 识别图片...' : '正在调用 Text LLM 生成回答...' }}</p>
           </div>
@@ -1110,7 +1311,7 @@ onMounted(async () => {
           @dragleave.stop="onDragLeave"
           @drop.stop="onDrop"
         >
-          <div v-if="attachedFiles.length || weatherContext" class="context-strip">
+          <div v-if="attachedFiles.length" class="context-strip">
             <div v-for="(item, index) in attachedFiles" :key="`${item.name}-${index}`" class="attachment-card">
               <span class="file-badge">{{ fileIcon(item) }}</span>
               <span class="file-meta">
@@ -1118,13 +1319,6 @@ onMounted(async () => {
                 <small>{{ item.type }} · {{ formatFileSize(item.size) }}</small>
               </span>
               <button type="button" title="取消上传" @click="removeAttachment(index)">×</button>
-            </div>
-            <div v-if="weatherContext" class="attachment-card weather-card">
-              <span class="file-badge">天</span>
-              <span class="file-meta">
-                <strong>{{ weatherContext.climate_zone }} · {{ weatherContext.weather_text || '天气未知' }}</strong>
-                <small>{{ formatCoordinate(weatherContext.latitude) }}, {{ formatCoordinate(weatherContext.longitude) }}</small>
-              </span>
             </div>
           </div>
 
@@ -1163,15 +1357,41 @@ onMounted(async () => {
                     data-tip="当前支持 png、jpg、jpeg、webp 图片"
                     @click="triggerFileUpload"
                   >
-                    <span>📎</span>
-                    上传图片
+                    <span><img :src="toolIcons.upload" alt="" /></span>
+                    上传图片/文件
                   </button>
                   <button type="button" @click="loadWeatherFromBrowser" :disabled="locationLoading">
-                    <span>⌖</span>
+                    <span><img :src="toolIcons.weather" alt="" /></span>
                     {{ locationLoading ? '获取中...' : environmentReady ? '更新位置和天气' : '获取位置和天气' }}
+                  </button>
+                  <button type="button" @click="enableWebSearch">
+                    <span><img :src="toolIcons.webSearch" alt="" /></span>
+                    网页搜索
                   </button>
                 </div>
               </div>
+              <button
+                v-if="weatherContext"
+                type="button"
+                class="tool-chip"
+                title="取消天气和位置"
+                @click="clearWeatherContext"
+              >
+                <img :src="toolIcons.weather" alt="" />
+                <span>天气与位置</span>
+                <b>×</b>
+              </button>
+              <button
+                v-if="webSearchEnabled"
+                type="button"
+                class="tool-chip"
+                title="取消网页搜索"
+                @click="webSearchEnabled = false"
+              >
+                <img :src="toolIcons.webSearch" alt="" />
+                <span>网页搜索</span>
+                <b>×</b>
+              </button>
               <button
                 type="button"
                 class="thinking-button"
@@ -1179,6 +1399,7 @@ onMounted(async () => {
                 :disabled="appLocked || isBusy"
                 @click="deepThinking = !deepThinking"
               >
+                <img :src="toolIcons.deepThink" alt="" />
                 深度思考
               </button>
               <span class="composer-spacer"></span>

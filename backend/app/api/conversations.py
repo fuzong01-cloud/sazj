@@ -6,9 +6,10 @@ from app.repositories.conversation_repository import (
     delete_conversation,
     get_conversation_detail,
     list_conversations_page,
+    rename_conversation,
 )
 from app.schemas.auth import UserPublic
-from app.schemas.conversation import ConversationDetail, ConversationPage
+from app.schemas.conversation import ConversationDetail, ConversationPage, ConversationRenameRequest, ConversationStored
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
 
@@ -45,3 +46,15 @@ def remove_conversation(
 ) -> None:
     if not delete_conversation(conversation_id, current_user.id):
         raise HTTPException(status_code=404, detail="会话不存在")
+
+
+@router.patch("/{conversation_id}", response_model=ConversationStored)
+def update_conversation_title(
+    conversation_id: int,
+    payload: ConversationRenameRequest,
+    current_user: UserPublic = Depends(get_current_user),
+) -> ConversationStored:
+    conversation = rename_conversation(conversation_id, current_user.id, payload.title)
+    if conversation is None:
+        raise HTTPException(status_code=404, detail="会话不存在")
+    return conversation

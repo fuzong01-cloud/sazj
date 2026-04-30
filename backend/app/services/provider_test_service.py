@@ -2,6 +2,8 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
+import httpx
+
 from app.providers.chat_completions_runtime import (
     build_chat_completions_url,
     extract_upstream_error_message,

@@ -20,6 +20,7 @@ class ChatRequest(BaseModel):
     provider_id: int | None = None
     conversation_id: int | None = None
     deep_thinking: bool = False
+    web_search: bool = False
 
 
 class ChatResponse(BaseModel):

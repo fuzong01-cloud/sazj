@@ -36,6 +36,10 @@ class ConversationStored(BaseModel):
     updated_at: datetime
 
 
+class ConversationRenameRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=120)
+
+
 class ConversationDetail(ConversationStored):
     messages: list[ConversationMessageStored]
 

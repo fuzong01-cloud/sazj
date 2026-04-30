@@ -17,6 +17,7 @@ from app.services.predict_service import (
     InvalidImageError,
     get_prediction_service,
 )
+from app.services.web_search_service import WebSearchError, format_search_context, search_web
 
 router = APIRouter(tags=["predict"])
 
@@ -31,6 +32,7 @@ async def predict_image(
     conversation_id: int | None = Form(default=None),
     prompt: str | None = Form(default=None),
     deep_thinking: bool = Form(default=False),
+    web_search: bool = Form(default=False),
     current_user: UserPublic = Depends(get_current_user),
 ) -> PredictResponse:
     image_bytes = await file.read()
@@ -53,6 +55,7 @@ async def predict_image(
                 "content_type": file.content_type or "",
                 "has_weather": latitude is not None and longitude is not None,
                 "deep_thinking": deep_thinking,
+                "web_search": web_search,
             },
         )
     )
@@ -65,12 +68,13 @@ async def predict_image(
                 longitude=longitude,
                 location_label=location_label,
             )
+        search_context, search_results = await _search_context(user_prompt, web_search)
         result = await service.predict(
             image_bytes=image_bytes,
             filename=file.filename or "",
             content_type=file.content_type or "",
             user_id=current_user.id,
-            prompt=user_prompt,
+            prompt=_with_search_context(user_prompt, search_context),
             deep_thinking=deep_thinking,
             weather=weather,
             provider_id=provider_id,
@@ -85,7 +89,11 @@ async def predict_image(
                 content=result.content or result.raw_text or result.summary,
                 provider_name=result.provider_name,
                 model_name=result.model_name,
-                payload=result.model_dump(mode="json"),
+                payload={
+                    **result.model_dump(mode="json"),
+                    "web_search": web_search,
+                    "web_search_results": [item.model_dump() for item in search_results],
+                },
             )
         )
         return result
@@ -161,6 +169,7 @@ async def predict_image_stream(
     conversation_id: int | None = Form(default=None),
     prompt: str | None = Form(default=None),
     deep_thinking: bool = Form(default=False),
+    web_search: bool = Form(default=False),
     current_user: UserPublic = Depends(get_current_user),
 ) -> StreamingResponse:
     image_bytes = await file.read()
@@ -185,6 +194,7 @@ async def predict_image_stream(
                 "content_type": file.content_type or "",
                 "has_weather": latitude is not None and longitude is not None,
                 "deep_thinking": deep_thinking,
+                "web_search": web_search,
             },
         )
     )
@@ -205,18 +215,21 @@ async def predict_image_stream(
             provider = get_enabled_vision_provider(provider_id, deep_thinking=deep_thinking)
             provider_name = provider.config.provider_name
             model_name = provider.config.model_name
+            search_context, search_results = await _search_context(user_prompt, web_search)
             yield _sse(
                 {
                     "type": "meta",
                     "conversation_id": conversation.id,
                     "provider_name": provider_name,
                     "model_name": model_name,
+                    "web_search": web_search,
+                    "web_search_results": [item.model_dump() for item in search_results],
                 }
             )
             async for event in provider.stream_predict(
                 image_bytes=image_bytes,
                 content_type=file.content_type or "",
-                user_prompt=user_prompt,
+                user_prompt=_with_search_context(user_prompt, search_context),
                 deep_thinking=deep_thinking,
                 weather=weather,
             ):
@@ -266,7 +279,11 @@ async def predict_image_stream(
                     content=result.content or result.raw_text or result.summary,
                     provider_name=provider_name,
                     model_name=model_name,
-                    payload=result.model_dump(mode="json"),
+                    payload={
+                        **result.model_dump(mode="json"),
+                        "web_search": web_search,
+                        "web_search_results": [item.model_dump() for item in search_results],
+                    },
                 )
             )
             yield _sse({"type": "result", "result": result.model_dump(mode="json")})
@@ -290,3 +307,19 @@ async def predict_image_stream(
 
 def _sse(payload: dict) -> str:
     return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+
+async def _search_context(query: str, enabled: bool) -> tuple[str, list]:
+    if not enabled:
+        return "", []
+    try:
+        results = await search_web(query)
+    except WebSearchError as exc:
+        return f"网页搜索失败：{exc}", []
+    return format_search_context(results), results
+
+
+def _with_search_context(prompt: str, search_context: str) -> str:
+    if not search_context:
+        return prompt
+    return f"{prompt}\n\n请参考以下网页搜索结果，但需要结合图片实际内容判断：\n{search_context}"
