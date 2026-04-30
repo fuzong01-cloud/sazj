@@ -302,11 +302,19 @@ async def predict_image_stream(
             )
             yield _sse({"type": "error", "message": message, "conversation_id": conversation.id})
 
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+    return StreamingResponse(event_stream(), media_type="text/event-stream", headers=_stream_headers())
 
 
 def _sse(payload: dict) -> str:
     return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+
+def _stream_headers() -> dict[str, str]:
+    return {
+        "Cache-Control": "no-cache, no-transform",
+        "Connection": "keep-alive",
+        "X-Accel-Buffering": "no",
+    }
 
 
 async def _search_context(query: str, enabled: bool) -> tuple[str, list]:

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
   changePassword,
   fetchMe,
@@ -18,10 +18,12 @@ import { fetchEnabledProviders } from './api/providers'
 import { fetchWeather } from './api/weather'
 
 const toolIcons = {
-  deepThink: '/deepthink.png',
-  weather: '/weather.png',
-  upload: '/link.png',
-  webSearch: '/websearch.png',
+  copy: '/Resource/copy.png',
+  deepThink: '/Resource/deepthink.png',
+  retry: '/Resource/restart.png',
+  weather: '/Resource/weather.png',
+  upload: '/Resource/link.png',
+  webSearch: '/Resource/websearch.png',
 }
 
 const health = ref(null)
@@ -60,10 +62,16 @@ const historyDetailLoading = ref(false)
 const historyDetailError = ref('')
 const historyDeleteLoading = ref(false)
 const activeHistoryMenuId = ref(null)
+const renameModalOpen = ref(false)
+const renameTarget = ref(null)
+const renameTitle = ref('')
+const renameLoading = ref(false)
+const renameError = ref('')
 const searchOpen = ref(false)
 const searchKeyword = ref('')
 
 const messages = ref([])
+const messageScrollRef = ref(null)
 const currentConversationId = ref(null)
 const composerText = ref('')
 const chatLoading = ref(false)
@@ -92,6 +100,8 @@ const providers = ref([])
 const providerError = ref('')
 const selectedProviderId = ref('')
 const deepThinking = ref(false)
+let scrollFrame = 0
+const reasoningTimers = new Set()
 
 const historyPage = computed(() => Math.floor(historyOffset.value / historyLimit.value) + 1)
 const historyPageCount = computed(() => Math.max(1, Math.ceil(historyTotal.value / historyLimit.value)))
@@ -225,6 +235,7 @@ function openProfileModal() {
 function closeModals() {
   authModalOpen.value = false
   profileModalOpen.value = false
+  renameModalOpen.value = false
 }
 
 async function submitAuth() {
@@ -383,6 +394,10 @@ async function selectHistory(record) {
           role: item.role,
           type: 'prediction',
           result: payload,
+          reasoningOpen: false,
+          reasoningManual: false,
+          reasoningStreaming: false,
+          reasoningElapsedSeconds: 0,
           provider: payload.provider_name || '',
         }
       }
@@ -390,9 +405,14 @@ async function selectHistory(record) {
         role: item.role,
         text: item.content,
         reasoning: payload.reasoning_content || '',
+        reasoningOpen: false,
+        reasoningManual: false,
+        reasoningStreaming: false,
+        reasoningElapsedSeconds: 0,
         provider: item.provider_name || '',
       }
     })
+    queueScrollToBottom()
   } catch (err) {
     historyDetailError.value = err instanceof Error ? err.message : '历史详情获取失败'
   } finally {
@@ -454,28 +474,124 @@ async function removeHistoryByRecord(record) {
   }
 }
 
-async function renameHistoryByRecord(record) {
+function openRenameModal(record) {
   if (!record) return
   activeHistoryMenuId.value = null
-  const nextTitle = window.prompt('重命名会话', record.title || '')
-  if (nextTitle === null) return
-  const normalized = nextTitle.trim()
-  if (!normalized || normalized === record.title) return
+  renameTarget.value = record
+  renameTitle.value = record.title || ''
+  renameError.value = ''
+  renameModalOpen.value = true
+}
 
+async function submitRenameHistory() {
+  if (!renameTarget.value || renameLoading.value) return
+  const normalized = renameTitle.value.trim()
+  if (!normalized) {
+    renameError.value = '请输入会话名称'
+    return
+  }
+  if (normalized === renameTarget.value.title) {
+    renameModalOpen.value = false
+    return
+  }
+
+  renameLoading.value = true
+  renameError.value = ''
   try {
-    const updated = await renameHistoryRecord(record.id, normalized)
+    const updated = await renameHistoryRecord(renameTarget.value.id, normalized)
     historyRecords.value = historyRecords.value.map((item) => (item.id === updated.id ? updated : item))
     if (selectedHistory.value?.id === updated.id) {
       selectedHistory.value = { ...selectedHistory.value, title: updated.title, updated_at: updated.updated_at }
     }
+    renameModalOpen.value = false
+    renameTarget.value = null
   } catch (err) {
-    historyError.value = err instanceof Error ? err.message : '历史记录重命名失败'
+    renameError.value = err instanceof Error ? err.message : '历史记录重命名失败'
+  } finally {
+    renameLoading.value = false
   }
 }
 
 function closeFloatingPanels() {
   plusMenuOpen.value = false
   activeHistoryMenuId.value = null
+}
+
+function queueScrollToBottom() {
+  nextTick(() => {
+    if (scrollFrame) cancelAnimationFrame(scrollFrame)
+    scrollFrame = requestAnimationFrame(() => {
+      const scrollBox = messageScrollRef.value
+      if (!scrollBox) return
+      scrollBox.scrollTop = scrollBox.scrollHeight
+    })
+  })
+}
+
+function setReasoningOpen(message, open) {
+  if (!message) return
+  message.reasoningProgrammatic = true
+  message.reasoningOpen = open
+  nextTick(() => {
+    message.reasoningProgrammatic = false
+  })
+}
+
+function startReasoningTimer(message) {
+  if (!message || message.reasoningTimer) return
+  message.reasoningStartedAt = message.reasoningStartedAt || Date.now()
+  message.reasoningElapsedSeconds = message.reasoningElapsedSeconds || 0
+  message.reasoningStreaming = true
+  const timer = window.setInterval(() => {
+    message.reasoningElapsedSeconds = Math.max(0, Math.floor((Date.now() - message.reasoningStartedAt) / 1000))
+  }, 1000)
+  message.reasoningTimer = timer
+  reasoningTimers.add(timer)
+}
+
+function stopReasoningTimer(message) {
+  if (!message) return
+  if (message.reasoningTimer) {
+    window.clearInterval(message.reasoningTimer)
+    reasoningTimers.delete(message.reasoningTimer)
+    message.reasoningTimer = null
+  }
+  if (message.reasoningStartedAt) {
+    message.reasoningElapsedSeconds = Math.max(0, Math.floor((Date.now() - message.reasoningStartedAt) / 1000))
+  }
+  message.reasoningStreaming = false
+}
+
+function reasoningTitle(message) {
+  const seconds = message?.reasoningElapsedSeconds || 0
+  if (message?.reasoningStreaming) {
+    return seconds > 0 ? `思考中... 已深度思考 ${seconds} 秒` : '思考中...'
+  }
+  if (seconds > 0) return `已深度思考 ${seconds} 秒`
+  return '推理过程'
+}
+
+function openReasoningDuringStream(message) {
+  startReasoningTimer(message)
+  if (!message?.reasoningManual) {
+    setReasoningOpen(message, true)
+  }
+  queueScrollToBottom()
+}
+
+function collapseReasoningForAnswer(message) {
+  stopReasoningTimer(message)
+  if (!message?.reasoningManual) {
+    setReasoningOpen(message, false)
+  }
+  queueScrollToBottom()
+}
+
+function onReasoningToggle(message, event) {
+  if (!message) return
+  message.reasoningOpen = event.target.open
+  if (message.reasoningProgrammatic) return
+  message.reasoningManual = true
 }
 
 function enableWebSearch() {
@@ -690,6 +806,7 @@ async function submitTextMessage(text) {
     text,
     files,
   })
+  queueScrollToBottom()
   composerText.value = ''
   clearAttachments()
   chatLoading.value = true
@@ -697,9 +814,14 @@ async function submitTextMessage(text) {
     role: 'assistant',
     text: '',
     reasoning: '',
+    reasoningOpen: Boolean(deepThinking.value),
+    reasoningManual: false,
+    reasoningStreaming: false,
+    reasoningElapsedSeconds: 0,
     provider: '',
   }
   messages.value.push(assistantMessage)
+  queueScrollToBottom()
 
   try {
     await streamAssistant(
@@ -718,26 +840,33 @@ async function submitTextMessage(text) {
         },
         onReasoning(chunk) {
           assistantMessage.reasoning += chunk
+          openReasoningDuringStream(assistantMessage)
         },
         onContent(chunk) {
+          collapseReasoningForAnswer(assistantMessage)
           assistantMessage.text += chunk
+          queueScrollToBottom()
         },
         onDone(event) {
           currentConversationId.value = event.conversation_id || currentConversationId.value
+          collapseReasoningForAnswer(assistantMessage)
         },
       },
     )
     if (!assistantMessage.text && assistantMessage.reasoning) {
       assistantMessage.text = '模型已返回推理过程，但尚未生成最终答案。请增大后台输出长度、关闭深度思考，或稍后重试。'
+      collapseReasoningForAnswer(assistantMessage)
     }
     if (!assistantMessage.text) {
       assistantMessage.text = '模型未返回有效内容'
     }
+    queueScrollToBottom()
     await loadHistory()
   } catch (err) {
     if (err?.conversationId) currentConversationId.value = err.conversationId
     chatError.value = normalizeModelError(err instanceof Error ? err.message : 'AI 助手调用失败')
     assistantMessage.text = chatError.value
+    queueScrollToBottom()
     await loadHistory()
   } finally {
     chatLoading.value = false
@@ -754,6 +883,7 @@ async function submitImageMessage(text, imageAttachment) {
     imageUrl: imageAttachment.previewUrl,
     files,
   })
+  queueScrollToBottom()
   composerText.value = ''
   attachedFiles.value = []
   selectedImagePreview.value = ''
@@ -772,9 +902,14 @@ async function submitImageMessage(text, imageAttachment) {
       suggestions: [],
       reasoning_content: '',
     },
+    reasoningOpen: Boolean(deepThinking.value),
+    reasoningManual: false,
+    reasoningStreaming: false,
+    reasoningElapsedSeconds: 0,
     provider: activeProvider.value?.provider_name || '',
   }
   messages.value.push(assistantMessage)
+  queueScrollToBottom()
 
   try {
     await streamPredictImage(
@@ -794,20 +929,26 @@ async function submitImageMessage(text, imageAttachment) {
         },
         onReasoning(chunk) {
           assistantMessage.result.reasoning_content += chunk
+          openReasoningDuringStream(assistantMessage)
         },
         onContent(chunk) {
+          collapseReasoningForAnswer(assistantMessage)
           assistantMessage.result.content += chunk
           assistantMessage.result.raw_text = assistantMessage.result.content
           assistantMessage.result.summary = assistantMessage.result.content
+          queueScrollToBottom()
         },
         onResult(result) {
+          collapseReasoningForAnswer(assistantMessage)
           assistantMessage.result = result
           assistantMessage.provider = result.provider_name || ''
           predictResult.value = result
           if (result.weather) weatherContext.value = result.weather
+          queueScrollToBottom()
         },
         onDone(event) {
           currentConversationId.value = event.conversation_id || currentConversationId.value
+          collapseReasoningForAnswer(assistantMessage)
         },
       },
     )
@@ -817,6 +958,7 @@ async function submitImageMessage(text, imageAttachment) {
     predictError.value = normalizeModelError(err instanceof Error ? err.message : '图片识别失败')
     assistantMessage.type = ''
     assistantMessage.text = predictError.value
+    queueScrollToBottom()
     await loadHistory()
   } finally {
     predictLoading.value = false
@@ -956,9 +1098,14 @@ async function regenerateTextAnswer(index, text, files = []) {
     role: 'assistant',
     text: '',
     reasoning: '',
+    reasoningOpen: Boolean(deepThinking.value),
+    reasoningManual: false,
+    reasoningStreaming: false,
+    reasoningElapsedSeconds: 0,
     provider: '',
   }
   messages.value.splice(index, 0, assistantMessage)
+  queueScrollToBottom()
   chatLoading.value = true
   chatError.value = ''
 
@@ -979,23 +1126,30 @@ async function regenerateTextAnswer(index, text, files = []) {
         },
         onReasoning(chunk) {
           assistantMessage.reasoning += chunk
+          openReasoningDuringStream(assistantMessage)
         },
         onContent(chunk) {
+          collapseReasoningForAnswer(assistantMessage)
           assistantMessage.text += chunk
+          queueScrollToBottom()
         },
         onDone(event) {
           currentConversationId.value = event.conversation_id || currentConversationId.value
+          collapseReasoningForAnswer(assistantMessage)
         },
       },
     )
     if (!assistantMessage.text && assistantMessage.reasoning) {
       assistantMessage.text = '模型已返回推理过程，但尚未生成最终答案。请增大后台输出长度、关闭深度思考，或稍后重试。'
+      collapseReasoningForAnswer(assistantMessage)
     }
     if (!assistantMessage.text) assistantMessage.text = '模型未返回有效内容'
+    queueScrollToBottom()
     await loadHistory()
   } catch (err) {
     if (err?.conversationId) currentConversationId.value = err.conversationId
     assistantMessage.text = normalizeModelError(err instanceof Error ? err.message : 'AI 助手调用失败')
+    queueScrollToBottom()
     await loadHistory()
   } finally {
     chatLoading.value = false
@@ -1017,9 +1171,14 @@ async function regenerateImageAnswer(index, text, imageAttachment) {
       suggestions: [],
       reasoning_content: '',
     },
+    reasoningOpen: Boolean(deepThinking.value),
+    reasoningManual: false,
+    reasoningStreaming: false,
+    reasoningElapsedSeconds: 0,
     provider: activeProvider.value?.provider_name || '',
   }
   messages.value.splice(index, 0, assistantMessage)
+  queueScrollToBottom()
   predictLoading.value = true
   predictError.value = ''
 
@@ -1041,19 +1200,25 @@ async function regenerateImageAnswer(index, text, imageAttachment) {
         },
         onReasoning(chunk) {
           assistantMessage.result.reasoning_content += chunk
+          openReasoningDuringStream(assistantMessage)
         },
         onContent(chunk) {
+          collapseReasoningForAnswer(assistantMessage)
           assistantMessage.result.content += chunk
           assistantMessage.result.raw_text = assistantMessage.result.content
           assistantMessage.result.summary = assistantMessage.result.content
+          queueScrollToBottom()
         },
         onResult(result) {
+          collapseReasoningForAnswer(assistantMessage)
           assistantMessage.result = result
           assistantMessage.provider = result.provider_name || ''
           predictResult.value = result
+          queueScrollToBottom()
         },
         onDone(event) {
           currentConversationId.value = event.conversation_id || currentConversationId.value
+          collapseReasoningForAnswer(assistantMessage)
         },
       },
     )
@@ -1062,6 +1227,7 @@ async function regenerateImageAnswer(index, text, imageAttachment) {
     if (err?.conversationId) currentConversationId.value = err.conversationId
     assistantMessage.type = ''
     assistantMessage.text = normalizeModelError(err instanceof Error ? err.message : '图片识别失败')
+    queueScrollToBottom()
     await loadHistory()
   } finally {
     predictLoading.value = false
@@ -1104,6 +1270,12 @@ onMounted(async () => {
   await restoreSession()
   await loadHistory()
 })
+
+onUnmounted(() => {
+  if (scrollFrame) cancelAnimationFrame(scrollFrame)
+  reasoningTimers.forEach((timer) => window.clearInterval(timer))
+  reasoningTimers.clear()
+})
 </script>
 
 <template>
@@ -1120,10 +1292,19 @@ onMounted(async () => {
     <div v-if="pageDragActive" class="drop-overlay">
       <div>释放以上传图片</div>
     </div>
+    <button
+      v-if="sidebarCollapsed"
+      type="button"
+      class="sidebar-expand-button collapse-button"
+      title="展开侧边栏"
+      @click.stop="sidebarCollapsed = false"
+    >
+      <span></span>
+    </button>
     <aside class="sidebar" aria-label="历史对话侧边栏">
       <div class="sidebar-top">
         <button type="button" class="brand-button" title="薯安智检">
-          <img src="/logo.png" alt="薯安智检" />
+          <img src="/Resource/logo.png" alt="薯安智检" />
           <span>薯安智检</span>
         </button>
         <button
@@ -1151,14 +1332,13 @@ onMounted(async () => {
         </button>
       </nav>
 
-      <div v-if="searchOpen && !sidebarCollapsed" class="search-box">
-        <input v-model="searchKeyword" placeholder="搜索历史记录" />
-      </div>
-
       <section class="history-section">
         <div v-if="!sidebarCollapsed" class="sidebar-heading">
           <span>历史对话</span>
           <button type="button" title="刷新历史" @click="loadHistory" :disabled="historyLoading">刷新</button>
+        </div>
+        <div v-if="searchOpen && !sidebarCollapsed" class="search-box">
+          <input v-model="searchKeyword" placeholder="搜索历史记录" />
         </div>
 
         <p v-if="historyError && !sidebarCollapsed" class="error-text">{{ historyError }}</p>
@@ -1184,7 +1364,7 @@ onMounted(async () => {
               ···
             </button>
             <div v-if="activeHistoryMenuId === record.id && !sidebarCollapsed" class="history-menu" @click.stop>
-              <button type="button" @click="renameHistoryByRecord(record)">重命名</button>
+              <button type="button" @click="openRenameModal(record)">重命名</button>
               <button type="button" class="danger-text" @click="removeHistoryByRecord(record)">删除</button>
             </div>
           </div>
@@ -1193,11 +1373,6 @@ onMounted(async () => {
           </p>
         </div>
 
-        <div v-if="historyTotal && !sidebarCollapsed" class="pager">
-          <button type="button" title="上一页" @click="goHistoryPage(-1)" :disabled="!canPrevHistory || historyLoading">‹</button>
-          <span>{{ historyPage }} / {{ historyPageCount }}</span>
-          <button type="button" title="下一页" @click="goHistoryPage(1)" :disabled="!canNextHistory || historyLoading">›</button>
-        </div>
       </section>
 
       <button type="button" class="account-entry" @click="openProfileModal">
@@ -1235,14 +1410,14 @@ onMounted(async () => {
         </div>
       </header>
 
-      <div class="message-scroll">
+      <div ref="messageScrollRef" class="message-scroll">
         <p v-if="providerError" class="error-text inline-error">{{ providerError }}</p>
 
         <p v-if="historyDetailError" class="error-text inline-error">{{ historyDetailError }}</p>
         <p v-else-if="historyDetailLoading" class="empty-text inline-error">正在读取详情...</p>
 
         <section v-if="!messages.length && !selectedHistory" class="welcome-panel">
-          <img src="/logo.png" alt="薯安智检" />
+          <img src="/Resource/logo.png" alt="薯安智检" />
           <h1>今天要分析什么？</h1>
           <p>
             可以直接询问病害问题，也可以拖拽图片到聊天页面任意位置进行识别。
@@ -1253,8 +1428,13 @@ onMounted(async () => {
         <article v-for="(message, index) in messages" :key="index" class="message" :class="message.role">
           <div class="message-content">
             <div v-if="message.text" class="markdown-body" v-html="renderMarkdown(message.text)"></div>
-            <details v-if="message.reasoning" class="reasoning-block">
-              <summary>推理过程</summary>
+            <details
+              v-if="message.reasoning"
+              class="reasoning-block"
+              :open="message.reasoningOpen"
+              @toggle="onReasoningToggle(message, $event)"
+            >
+              <summary>{{ reasoningTitle(message) }}</summary>
               <div class="markdown-body" v-html="renderMarkdown(message.reasoning)"></div>
             </details>
             <img v-if="message.imageUrl" :src="message.imageUrl" alt="已上传图片预览" />
@@ -1273,8 +1453,13 @@ onMounted(async () => {
                   <strong>{{ predictionStatus(message.result) }}</strong>
                 </div>
                 <div class="markdown-body" v-html="renderMarkdown(predictionContent(message.result))"></div>
-                <details v-if="message.result.reasoning_content" class="reasoning-block">
-                  <summary>推理过程</summary>
+                <details
+                  v-if="message.result.reasoning_content"
+                  class="reasoning-block"
+                  :open="message.reasoningOpen"
+                  @toggle="onReasoningToggle(message, $event)"
+                >
+                  <summary>{{ reasoningTitle(message) }}</summary>
                   <div class="markdown-body" v-html="renderMarkdown(message.result.reasoning_content)"></div>
                 </details>
                 <ul v-if="message.result.suggestions?.length" class="suggestion-list">
@@ -1285,8 +1470,14 @@ onMounted(async () => {
             </template>
             <small v-else-if="message.provider">{{ message.provider }}</small>
             <div class="message-actions">
-              <button type="button" @click="copyMessage(message)">复制</button>
-              <button v-if="message.role === 'assistant'" type="button" :disabled="isBusy" @click="retryMessage(index)">重试</button>
+              <button type="button" title="复制" @click="copyMessage(message)">
+                <img :src="toolIcons.copy" alt="" />
+                <span>复制</span>
+              </button>
+              <button v-if="message.role === 'assistant'" type="button" title="重试" :disabled="isBusy" @click="retryMessage(index)">
+                <img :src="toolIcons.retry" alt="" />
+                <span>重试</span>
+              </button>
             </div>
           </div>
         </article>
@@ -1412,7 +1603,7 @@ onMounted(async () => {
       </footer>
     </section>
 
-    <div v-if="authModalOpen || profileModalOpen" class="modal-backdrop" @click.self="closeModals">
+    <div v-if="authModalOpen || profileModalOpen || renameModalOpen" class="modal-backdrop" @click.self="closeModals">
       <section v-if="authModalOpen" class="modal-card">
         <button type="button" class="modal-close" @click="closeModals">×</button>
         <h2>{{ authTitle }}</h2>
@@ -1484,6 +1675,22 @@ onMounted(async () => {
         </form>
         <p v-if="profileError" class="error-text">{{ profileError }}</p>
         <p v-if="profileSuccess" class="success-text">{{ profileSuccess }}</p>
+      </section>
+
+      <section v-if="renameModalOpen" class="modal-card rename-modal">
+        <button type="button" class="modal-close" @click="closeModals">×</button>
+        <h2>重命名会话</h2>
+        <form class="rename-form" @submit.prevent="submitRenameHistory">
+          <label>
+            <span>会话名称</span>
+            <input v-model="renameTitle" maxlength="120" autofocus placeholder="输入新的会话名称" />
+          </label>
+          <div class="modal-actions">
+            <button type="button" class="text-button" @click="closeModals">取消</button>
+            <button type="submit" :disabled="renameLoading">{{ renameLoading ? '保存中...' : '保存' }}</button>
+          </div>
+        </form>
+        <p v-if="renameError" class="error-text">{{ renameError }}</p>
       </section>
     </div>
   </main>

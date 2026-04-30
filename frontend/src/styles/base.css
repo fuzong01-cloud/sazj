@@ -42,18 +42,23 @@ button:disabled {
 }
 
 .chat-shell.sidebar-collapsed {
-  --sidebar-width: 68px;
+  --sidebar-width: 300px;
 }
 
 .sidebar {
   display: grid;
-  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
   gap: 12px;
   height: 100vh;
   padding: 12px;
   border-right: 1px solid #e7e7e7;
   background: #f7f7f8;
   overflow: hidden;
+}
+
+.sidebar-collapsed .sidebar {
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .sidebar-top,
@@ -80,7 +85,6 @@ button:disabled {
 .account-entry,
 .topbar-status button,
 .model-picker button,
-.pager button,
 .modal-close,
 .text-button {
   border: 0;
@@ -102,7 +106,6 @@ button:disabled {
 .history-item:hover,
 .account-entry:hover,
 .collapse-button:hover,
-.pager button:hover,
 .topbar-status button:hover,
 .model-picker button:hover {
   background: #ececec;
@@ -146,6 +149,16 @@ button:disabled {
   height: 18px;
   border-radius: 999px;
   background: #8f8f8f;
+}
+
+.sidebar-expand-button {
+  position: fixed;
+  top: 14px;
+  left: 14px;
+  z-index: 50;
+  border: 1px solid #eeeeee;
+  background: #ffffff;
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.12);
 }
 
 .sidebar-nav {
@@ -193,8 +206,12 @@ button:disabled {
 
 .history-section {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto minmax(0, 1fr);
   min-height: 0;
+}
+
+.search-box {
+  padding: 0 4px 8px;
 }
 
 .sidebar-heading {
@@ -314,26 +331,6 @@ button:disabled {
   color: #a13f34;
 }
 
-.pager {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  align-self: end;
-  padding: 12px 0 14px;
-  color: #6b6b6b;
-  font-size: 12px;
-}
-
-.pager button {
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
-  font-size: 18px;
-}
-
 .account-entry {
   display: grid;
   grid-template-columns: 30px minmax(0, 1fr);
@@ -389,39 +386,6 @@ button:disabled {
   display: none;
   color: #6b6b6b;
   font-size: 12px;
-}
-
-.sidebar-collapsed .brand-button span,
-.sidebar-collapsed .nav-text,
-.sidebar-collapsed .search-box,
-.sidebar-collapsed .sidebar-heading,
-.sidebar-collapsed .history-main span,
-.sidebar-collapsed .history-main small,
-.sidebar-collapsed .history-main strong,
-.sidebar-collapsed .history-more,
-.sidebar-collapsed .pager,
-.sidebar-collapsed .account-copy {
-  display: none;
-}
-
-.sidebar-collapsed .sidebar {
-  padding: 10px;
-}
-
-.sidebar-collapsed .sidebar-nav button,
-.sidebar-collapsed .account-entry {
-  grid-template-columns: 1fr;
-  justify-items: center;
-  padding: 4px;
-}
-
-.sidebar-collapsed .history-item {
-  grid-template-columns: 1fr;
-}
-
-.sidebar-collapsed .history-main {
-  min-height: 36px;
-  padding: 8px;
 }
 
 .conversation {
@@ -616,6 +580,7 @@ button:disabled {
 
 .message.user {
   justify-content: flex-end;
+  padding-bottom: 42px;
 }
 
 .message.assistant {
@@ -623,6 +588,7 @@ button:disabled {
 }
 
 .message.user .message-content {
+  position: relative;
   border-radius: 18px;
   padding: 11px 14px;
   background: #f2f2f2;
@@ -756,17 +722,40 @@ button:disabled {
 }
 
 .message.user .message-actions {
-  justify-content: flex-end;
+  position: absolute;
+  left: 0;
+  bottom: -38px;
+  justify-content: flex-start;
+  margin-top: 0;
 }
 
 .message-actions button {
-  min-height: 28px;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 30px;
+  min-height: 30px;
   border: 0;
   border-radius: 8px;
-  padding: 4px 8px;
+  padding: 4px 6px;
   color: #6b6b6b;
   background: transparent;
   font-size: 12px;
+}
+
+.message-actions button img {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+}
+
+.message-actions button span {
+  display: none;
+}
+
+.message-actions button:hover span {
+  display: inline;
 }
 
 .message-actions button:hover {
@@ -1257,12 +1246,14 @@ button:disabled {
 }
 
 .auth-form,
-.profile-form {
+.profile-form,
+.rename-form {
   display: grid;
   gap: 10px;
 }
 
-.profile-form label {
+.profile-form label,
+.rename-form label {
   display: grid;
   gap: 5px;
   color: #4b4b4b;
@@ -1309,7 +1300,8 @@ button:disabled {
 }
 
 .auth-form input,
-.profile-form input {
+.profile-form input,
+.rename-form input {
   width: 100%;
   min-height: 40px;
   border: 1px solid #d9d9d9;
@@ -1322,10 +1314,34 @@ button:disabled {
 
 .auth-form input:focus,
 .profile-form input:focus,
+.rename-form input:focus,
 .search-box input:focus,
 .model-picker select:focus {
   border-color: #214b35;
   box-shadow: 0 0 0 3px rgba(33, 75, 53, 0.12);
+}
+
+.rename-modal {
+  width: min(460px, 100%);
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.modal-actions button {
+  min-height: 38px;
+  border-radius: 9px;
+  padding: 8px 14px;
+}
+
+.modal-actions button[type="submit"] {
+  border: 0;
+  color: #ffffff;
+  background: #214b35;
 }
 
 .auth-form button,
@@ -1370,14 +1386,24 @@ button:disabled {
 }
 
 @media (max-width: 920px) {
-  .chat-shell,
-  .chat-shell.sidebar-collapsed {
+  .chat-shell {
     --sidebar-width: 0px;
     grid-template-columns: 1fr;
   }
 
+  .chat-shell.sidebar-collapsed {
+    --sidebar-width: 300px;
+    grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+  }
+
   .sidebar {
     display: none;
+  }
+
+  .sidebar-collapsed .sidebar {
+    display: grid;
+    visibility: hidden;
+    pointer-events: none;
   }
 
   .topbar {
@@ -1393,6 +1419,10 @@ button:disabled {
   .composer-wrap {
     left: 0;
     padding: 10px 12px 14px;
+  }
+
+  .chat-shell.sidebar-collapsed .composer-wrap {
+    left: var(--sidebar-width);
   }
 
   .detail-grid {

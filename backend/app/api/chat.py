@@ -168,11 +168,19 @@ async def chat_stream(
             _save_error(conversation.id, current_user.id, message)
             yield _sse({"type": "error", "message": message, "conversation_id": conversation.id})
 
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+    return StreamingResponse(event_stream(), media_type="text/event-stream", headers=_stream_headers())
 
 
 def _sse(payload: dict) -> str:
     return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+
+def _stream_headers() -> dict[str, str]:
+    return {
+        "Cache-Control": "no-cache, no-transform",
+        "Connection": "keep-alive",
+        "X-Accel-Buffering": "no",
+    }
 
 
 def _request_payload(payload: ChatRequest) -> dict:
