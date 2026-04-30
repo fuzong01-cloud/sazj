@@ -4,7 +4,7 @@
 
 日期：2026-04-30
 
-该版本把前端体验推进到 ChatGPT 风格的对话式 WebUI，并补齐流式输出、深度思考、网页搜索和用户会话历史的主路径。
+该版本把前端体验推进到 ChatGPT 风格的对话式 WebUI，并补齐流式输出、深度思考、网页搜索、用户会话历史和服务器自动更新的主路径。
 
 本基线已完成：
 
@@ -25,12 +25,15 @@
 - 后端 `/api/chat/stream` 和 `/api/predict/stream` 返回 SSE，并增加反缓冲响应头。
 - Provider 运行时支持流式 `chat/completions`，能解析普通内容和推理内容。
 - 新增网页搜索服务，回答前可把搜索结果作为上下文传给模型。
+- 新增 `auto_update.py`，用于 Windows Server 定时检查 GitHub 更新并安全 fast-forward 到本地。
+- 新增 `deploy/windows_auto_update.md`，说明如何用 Windows 任务计划程序定时执行自动更新。
 
 已知限制：
 
 - 实际流式体验取决于上游模型是否流式返回、网络代理是否缓冲，以及浏览器是否及时刷新。
 - 网页搜索当前是轻量实现，结果质量和可用性依赖外部搜索页面。
 - 深度思考内容的字段名兼容不同模型仍需继续扩展。
+- 自动更新适合短期演示部署；正式生产环境仍建议使用人工发布或 CI/CD。
 
 ## v0.5.9 provider runtime and Kimi compatibility baseline
 

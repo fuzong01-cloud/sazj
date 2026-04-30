@@ -84,6 +84,7 @@
 |-- build.py                         # 安装依赖并构建前端
 |-- start.py                         # 启动 FastAPI 后端，默认 SQLite
 |-- start_frontend.py                # 启动 Vite 前端开发服务
+|-- auto_update.py                   # Windows Server 自动检查 GitHub 更新
 |-- final_model.h5                   # legacy 本地 CNN 模型资料，不参与新系统运行
 |-- backend/
 |   |-- app/
@@ -237,8 +238,29 @@ C:\sazj\
 - [使用 NSSM 注册 FastAPI 后端服务](deploy/windows_nssm_service.md)
 - [Windows Server .env 示例](deploy/windows_env_example.md)
 - [Windows Server 防火墙与公网访问说明](deploy/windows_firewall_notes.md)
+- [Windows Server 自动更新说明](deploy/windows_auto_update.md)
 
 2 核 2GB 服务器只负责运行 Web 服务、SQLite 演示库、上传文件、日志和外部 API 转发。不要在服务器上训练 CNN 或运行本地大模型。
+
+## 自动更新
+
+服务器部署后可使用：
+
+```powershell
+python auto_update.py --check-only
+```
+
+检查 `https://github.com/fuzong01-cloud/sazj` 是否有新版本。
+
+执行更新：
+
+```powershell
+python auto_update.py --restart-service --service-name sazj-backend
+```
+
+脚本只允许 fast-forward 更新。如果服务器本地代码有未提交改动，自动更新会停止，避免覆盖手工修改。运行数据如 `.env`、SQLite 数据库、`uploads` 和 `logs` 不会被 Git 更新覆盖。
+
+定时执行方式见 [Windows Server 自动更新说明](deploy/windows_auto_update.md)。
 
 ## Legacy 资料说明
 

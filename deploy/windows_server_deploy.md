@@ -169,6 +169,25 @@ http://服务器公网IP/admin/providers
 
 后端建议使用 NSSM 注册为 Windows 服务，详见 [windows_nssm_service.md](./windows_nssm_service.md)。
 
+## 自动更新
+
+服务器部署完成后，可以使用根目录 `auto_update.py` 定时检查 GitHub 更新。脚本会从 `https://github.com/fuzong01-cloud/sazj` 的 `origin/main` 拉取新版本，只允许 fast-forward 更新，并在检测到本地未提交改动时自动停止。
+
+手动检查：
+
+```powershell
+cd C:\sazj
+.\venv\Scripts\python.exe auto_update.py --check-only
+```
+
+执行更新并重启后端服务：
+
+```powershell
+.\venv\Scripts\python.exe auto_update.py --restart-service --service-name sazj-backend
+```
+
+定时任务配置详见 [windows_auto_update.md](./windows_auto_update.md)。
+
 ## 防火墙
 
 至少开放：
